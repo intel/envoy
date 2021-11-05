@@ -1,0 +1,60 @@
+syntax = "proto3";
+
+package envoy.extensions.private_key_providers.sgx.v3alpha;
+
+import "envoy/config/core/v3/config_source.proto";
+
+import "udpa/annotations/status.proto";
+
+option java_package = "io.envoyproxy.envoy.extensions.private_key_providers.sgx.v3";
+option java_outer_classname = "SgxProto";
+option java_multiple_files = true;
+option go_package = "github.com/envoyproxy/go-control-plane/envoy/extensions/private_key_providers/sgx/v3alpha";
+option (udpa.annotations.file_status).package_version_status = ACTIVE;
+
+// [#protodoc-title: Sgx private key provider]
+// [#extension: envoy.tls.key_providers.sgx]
+
+message SgxPrivateKeyMethodConfig {
+  // Path to the ctk library file.
+  string sgx_library = 1;
+
+  // Label of the key pair.
+  string key_label = 2;
+
+  // User PIN.
+  string usr_pin = 3;
+
+  // Security Officer user Pin.
+  string so_pin = 4;
+
+  // Label of the token.
+  string token_label = 5;
+
+  // There are two stages for the sgx private key provider: `init` and `cert`.
+  // If stage is `init`, it will create the key pair and CSR. Then it will return the CSR back.
+  // If stage is `cert`, it will not create any new key pair. Instead, it will find the key pair which has been created.
+  //   In this step, the final certificate will be send to Envoy.
+  string stage = 6;
+
+  // Type of the key pair in SGX enclave, `rsa` or `ecdsa`.
+  string key_type = 7;
+
+  // Key size of the RSA key. It will be used when `key_type` is `rsa`.
+  string rsa_key_size = 8;
+
+  // The parameter for the ECDSA Key, for example: `P-256`. It will be used when `key_type` is `ecdsa`.
+  string ecdsa_key_param = 9;
+
+  // The configs of CSR. We will generate CSR according to it.
+  string csr_config = 10;
+
+  // It's the key of the extension in CSR. The value of the extension will be the quote.
+  string quote_key = 11;
+
+  // It's the key of the extension in CSR. The value of the extension will be the quote public key.
+  string quotepub_key = 12;
+
+  // Envoy will send CSR object to SDS-Server/Istio-Agent through this channel.
+  config.core.v3.ConfigSource sds_config = 13;
+}
