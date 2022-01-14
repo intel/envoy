@@ -1,0 +1,43 @@
+From ead3d69e8d6d1dcd0a654153f099bf1bab7190bd Mon Sep 17 00:00:00 2001
+From: Ismo Puustinen <ismo.puustinen@intel.com>
+Date: Mon, 15 Aug 2022 10:18:17 +0300
+Subject: [PATCH 3/4] Fix a data race in qzMemRegAddr().
+
+Signed-off-by: Ismo Puustinen <ismo.puustinen@intel.com>
+---
+ src/qatzip_mem.c | 9 +++++----
+ 1 file changed, 5 insertions(+), 4 deletions(-)
+
+diff --git a/src/qatzip_mem.c b/src/qatzip_mem.c
+index 7e187f6..22f0133 100755
+--- a/src/qatzip_mem.c
++++ b/src/qatzip_mem.c
+@@ -121,9 +121,14 @@ static void qzMemRegAddr(unsigned char *a, size_t sz)
+ {
+     unsigned long al, b;
+ 
++    if (0 != pthread_mutex_lock(&g_qz_table_lock)) {
++        return;
++    }
++
+     /*addr already registered*/
+     if ((1 == qzMemFindAddr(a)) &&
+         (1 == qzMemFindAddr(a + sz - 1))) {
++        pthread_mutex_unlock(&g_qz_table_lock);
+         return;
+     }
+ 
+@@ -132,10 +137,6 @@ static void qzMemRegAddr(unsigned char *a, size_t sz)
+     sz += (al - b);
+     QZ_DEBUG("4 KB page is 0x%lx\n", b);
+ 
+-    if (0 != pthread_mutex_lock(&g_qz_table_lock)) {
+-        return;
+-    }
+-
+     QZ_DEBUG("Inserting 0x%lx size %lx to page table\n", b, sz);
+     storeMmapRange(&g_qz_page_table, (void *)b, PINNED, sz);
+ 
+-- 
+2.37.2
+
