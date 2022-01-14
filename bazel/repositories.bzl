@@ -186,6 +186,8 @@ def envoy_dependencies(skip_targets = []):
     _com_github_unicode_org_icu()
     _com_github_intel_ipp_crypto_crypto_mb()
     _com_github_intel_qatlib()
+    _com_github_intel_qatzip()
+    _com_github_lz4_lz4()
     _com_github_jbeder_yaml_cpp()
     _com_github_libevent_libevent()
     _com_github_luajit_luajit()
@@ -409,6 +411,18 @@ def _com_github_intel_qatlib():
             "@envoy//bazel/foreign_cc:qatlib-0002-qatlib-Remove-remaining-shared-flags.patch",
             "@envoy//bazel/foreign_cc:qatlib-0003-configure-Check-if-pkg-config-is-installed-before-us.patch",
         ],
+    )
+
+def _com_github_intel_qatzip():
+    external_http_archive(
+        name = "com_github_intel_qatzip",
+        build_file_content = BUILD_ALL_CONTENT,
+    )
+
+def _com_github_lz4_lz4():
+    external_http_archive(
+        name = "com_github_lz4_lz4",
+        build_file_content = BUILD_ALL_CONTENT,
     )
 
 def _com_github_jbeder_yaml_cpp():
