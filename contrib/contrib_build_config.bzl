@@ -51,4 +51,8 @@ CONTRIB_EXTENSIONS = {
     #
 
     "envoy.network.connection_balance.dlb":                     "//contrib/network/connection_balance/dlb/source:connection_balancer",
+    # TLS peer certification validators
+    #
+
+    "envoy.tls.cert_validator.extension":                       "//contrib/transport_sockets/tls/cert_validator/extension/source:config",
 }

@@ -191,6 +191,7 @@ envoy_cc_library(
     external_deps = [
         "ssl",
     ],
+    visibility = ["//visibility:public"],
     deps = [
         "//envoy/stats:stats_interface",
         "//envoy/stats:stats_macros",
@@ -206,6 +207,7 @@ envoy_cc_library(
     external_deps = [
         "ssl",
     ],
+    visibility = ["//visibility:public"],
     deps = [
         "//source/common/common:assert_lib",
         "//source/common/common:empty_string",

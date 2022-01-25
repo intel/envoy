@@ -1,0 +1,40 @@
+syntax = "proto3";
+
+package envoy.extensions.transport_sockets.tls.v3;
+
+import "udpa/annotations/status.proto";
+import "validate/validate.proto";
+
+option java_package = "io.envoyproxy.envoy.extensions.transport_sockets.tls.v3";
+option java_outer_classname = "TlsExtensionValidatorConfigProto";
+option java_multiple_files = true;
+option go_package = "github.com/envoyproxy/go-control-plane/envoy/extensions/transport_sockets/tls/v3;tlsv3";
+option (udpa.annotations.file_status).package_version_status = ACTIVE;
+
+// [#protodoc-title: Extension Certificate Validator]
+// [#extension: envoy.tls.cert_validator.extension]
+
+// Configuration specific to the `EXTENSION`_ certificate validator.
+//
+// Example:
+//
+// .. validated-code-block:: yaml
+//
+//   custom_validator_config:
+//     name: envoy.tls.cert_validator.extension
+//     typed_config:
+//       "@type": type.googleapis.com/envoy.extensions.transport_sockets.tls.v3.ExtensionCertValidatorConfig
+//       extensions:
+//       - key: key1
+//         value: value1
+//       - name: key2
+//         value: value2
+//
+message ExtensionCertValidatorConfig {
+  message Extension {
+    string key = 1 [(validate.rules).string = {min_len: 1}];
+    string value = 2 [(validate.rules).string = {min_len: 1}];
+  }
+
+  repeated Extension extensions = 1 [(validate.rules).repeated = {min_items: 1}];
+}
