@@ -114,6 +114,7 @@ categories:
 - envoy.path.match
 - envoy.path.rewrite
 - envoy.tls_handshakers
+- envoy.certificate_providers
 
 status_values:
 - name: stable
