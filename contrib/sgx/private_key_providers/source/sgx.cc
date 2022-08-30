@@ -57,7 +57,7 @@ CK_RV SGXContext::sgxInit() {
   }
 
   status = p11_->C_Initialize(NULL_PTR);
-  // if (status != CKR_OK && status != CKR_CRYPTOKI_ALREADY_INITIALIZED) {
+
   if (status != CKR_OK) {
 
     ENVOY_LOG(debug, "Error during p11->C_Initialize: {}.\n", ERROR_CODE_TO_STRING(status));
@@ -81,7 +81,7 @@ CK_RV SGXContext::sgxInit() {
 
   status = p11_->C_Login(sessionhandle_, CKU_USER, CK_UTF8CHAR_PTR(userpin_.c_str()),
                          strnlen(userpin_.c_str(), maxKeyLabelSize));
-  // if (status != CKR_OK && status != CKR_USER_ALREADY_LOGGED_IN) {
+
   if (status != CKR_OK) {
     ENVOY_LOG(debug, "Error during C_Login: {}.\n", ERROR_CODE_TO_STRING(status));
     return status;
@@ -736,12 +736,6 @@ CK_RV SGXContext::rsaSign(CK_OBJECT_HANDLE privkey, CK_OBJECT_HANDLE pubkey, boo
                       mechanism.mechanism);
   ENVOY_LOG_TO_LOGGER(Logger::Registry::getLog(Logger::Id::secret), debug, "mechanism.paramLen {}",
                       mechanism.ulParameterLen);
-  ENVOY_LOG_TO_LOGGER(Logger::Registry::getLog(Logger::Id::secret), debug,
-                      "mechanism.pParameter.hashAlg {}",
-                      CK_RSA_PKCS_PSS_PARAMS_PTR(mechanism.pParameter)->hashAlg);
-  ENVOY_LOG_TO_LOGGER(Logger::Registry::getLog(Logger::Id::secret), debug,
-                      "mechanism.pParameter.mgf {}",
-                      CK_RSA_PKCS_PSS_PARAMS_PTR(mechanism.pParameter)->mgf);
 
   status = p11_->C_SignInit(sessionhandle_, &mechanism, privkey);
 
@@ -852,27 +846,348 @@ CK_RV SGXContext::ecdsaSign(CK_OBJECT_HANDLE private_key, CK_OBJECT_HANDLE pubke
   return status;
 }
 
-CK_RV SGXContext::createCSR(std::string& subj, std::string& key_label, std::string& out) const {
-  if (!isValidString(subj) || !isValidString(std::to_string(slotid_)) ||
-      !isValidString(key_label)) {
-    throw EnvoyException("The parameters can only contain 'a-zA-Z0-9', '-', '_', '/' or '='.");
+CK_RV SGXContext::getRSAPublicKey(CK_OBJECT_HANDLE pubkey, ByteString* modulus,
+                                  ByteString* exponent) {
+  CK_RV status = CKR_OK;
+
+  CK_ATTRIBUTE pubkey_template[] = {
+      {CKA_MODULUS, NULL_PTR, 0},
+      {CKA_PUBLIC_EXPONENT, NULL_PTR, 0},
+  };
+
+  status = p11_->C_GetAttributeValue(sessionhandle_, pubkey, pubkey_template, DIM(pubkey_template));
+  if (status != CKR_OK) {
+    return status;
   }
+
+  modulus->byte_size = pubkey_template[0].ulValueLen;
+  modulus->bytes = static_cast<CK_BYTE_PTR>(calloc(modulus->byte_size, sizeof(CK_BYTE)));
+  pubkey_template[0].pValue = modulus->bytes;
+
+  exponent->byte_size = pubkey_template[1].ulValueLen;
+  exponent->bytes = static_cast<CK_BYTE_PTR>(calloc(exponent->byte_size, sizeof(CK_BYTE)));
+  pubkey_template[1].pValue = exponent->bytes;
+
+  status = p11_->C_GetAttributeValue(sessionhandle_, pubkey, pubkey_template, DIM(pubkey_template));
+
+  return status;
+}
+
+CK_RV SGXContext::getECDSAPublicKey(CK_OBJECT_HANDLE pubkey, ByteString* group,
+                                    ByteString* points) {
+  CK_RV status = CKR_OK;
+
+  CK_ATTRIBUTE pubkey_template[] = {
+      {CKA_EC_PARAMS, NULL_PTR, 0},
+      {CKA_EC_POINT, NULL_PTR, 0},
+  };
+
+  status = p11_->C_GetAttributeValue(sessionhandle_, pubkey, pubkey_template, DIM(pubkey_template));
+  if (status != CKR_OK) {
+    return status;
+  }
+
+  group->byte_size = pubkey_template[0].ulValueLen;
+  group->bytes = static_cast<CK_BYTE_PTR>(calloc(group->byte_size, sizeof(CK_BYTE)));
+  pubkey_template[0].pValue = group->bytes;
+
+  points->byte_size = pubkey_template[1].ulValueLen;
+  points->bytes = static_cast<CK_BYTE_PTR>(calloc(points->byte_size, sizeof(CK_BYTE)));
+  pubkey_template[1].pValue = points->bytes;
+
+  status = p11_->C_GetAttributeValue(sessionhandle_, pubkey, pubkey_template, DIM(pubkey_template));
+
+  return status;
+}
+
+void SGXContext::addExt(STACK_OF(X509_EXTENSION) * exts, int nid, const char* subvalue) {
+  X509_EXTENSION* pSubExt = X509V3_EXT_nconf_nid(NULL_PTR, NULL_PTR, nid, subvalue);
+  if (pSubExt == NULL_PTR) {
+    throw EnvoyException(absl::StrCat("Failed to find x509_extension:", subvalue));
+  }
+  sk_X509_EXTENSION_push(exts, pSubExt);
+}
+
+unsigned long SGXContext::longVal(const ByteString& byteString) {
+  // Convert the first 8 bytes of the string to an unsigned long value
+  unsigned long rv = 0;
+
+  for (size_t i = 0; i < std::min(size_t(8), byteString.byte_size); i++) {
+    rv <<= 8;
+    rv += byteString.bytes[i];
+  }
+
+  return rv;
+}
+// Convert a DER encoded octet string to a raw ByteString
+ByteString SGXContext::octet2Raw(const ByteString& byteString) {
+  ByteString rv;
+  ByteString repr = byteString;
+  size_t len = repr.byte_size;
+  size_t controlOctets = 2;
+
+  if (len < controlOctets) {
+    ENVOY_LOG(debug, "Undersized octet string\n");
+    return rv;
+  }
+
+  if (repr.bytes[0] != 0x04) {
+    ENVOY_LOG(debug, "ByteString is not an octet string\n");
+    return rv;
+  }
+
+  // Definite, short
+  if (repr.bytes[1] < 0x80) {
+    if (repr.bytes[1] != (len - controlOctets)) {
+      if (repr.bytes[1] < (len - controlOctets)) {
+        ENVOY_LOG(debug, "Underrun octet string\n");
+      } else {
+        ENVOY_LOG(debug, "Overrun octet string\n");
+      }
+
+      return rv;
+    }
+  }
+  // Definite, long
+  else {
+    size_t lengthOctets = repr.bytes[1] & 0x7f;
+    controlOctets += lengthOctets;
+
+    if (controlOctets >= repr.byte_size) {
+      ENVOY_LOG(debug, "Undersized octet string\n");
+      return rv;
+    }
+
+    ByteString length;
+    length.byte_size = lengthOctets;
+    length.bytes = static_cast<CK_BYTE_PTR>(calloc(length.byte_size, sizeof(CK_BYTE)));
+    memcpy(length.bytes, repr.bytes + 2, lengthOctets); // NOLINT(safe-memcpy)
+
+    if (longVal(length) != (len - controlOctets)) {
+      if (longVal(length) < (len - controlOctets)) {
+        ENVOY_LOG(debug, "Underrun octet string\n");
+      } else {
+        ENVOY_LOG(debug, "Overrun octet string\n");
+      }
+      free(length.bytes);
+      return rv;
+    }
+  }
+
+  rv.byte_size = len - controlOctets;
+  rv.bytes = static_cast<CK_BYTE_PTR>(calloc(rv.byte_size, sizeof(CK_BYTE)));
+  memcpy(rv.bytes, repr.bytes + controlOctets, rv.byte_size); // NOLINT(safe-memcpy)
+  return rv;
+}
+
+int SGXContext::calculateDigest(const EVP_MD* md, const uint8_t* in, size_t in_len,
+                                unsigned char* hash, unsigned int* hash_len) {
+  bssl::ScopedEVP_MD_CTX ctx;
+
+  // Calculate the message digest for signing.
+  if (!EVP_DigestInit_ex(ctx.get(), md, NULL_PTR) || !EVP_DigestUpdate(ctx.get(), in, in_len) ||
+      !EVP_DigestFinal_ex(ctx.get(), hash, hash_len)) {
+    return 0;
+  }
+  return 1;
+}
+
+CK_RV SGXContext::createCSR(bool isrsa, CK_OBJECT_HANDLE pubkey, CK_OBJECT_HANDLE privkey,
+                            std::string& csr_config, std::string& quote, std::string& quote_key,
+                            std::string& quotepub, std::string& quotepub_key, std::string& out) {
 
   CK_RV status = CKR_OK;
-  std::string osslCsrCmdTotal = osslCsrCmd;
-  std::string osslCsrCmdKey = " -key";
-  std::string osslCsrCmdSubj = " -subj";
-  std::string osslCsrCmdOut = " -out";
+  X509_REQ* x509_req = NULL_PTR;
+  X509_NAME* x509_name = NULL_PTR;
+  EVP_PKEY* evp_pkey = NULL_PTR;
+  unsigned char* req_info_buffer = NULL_PTR;
+  ByteString signed_data;
+  BIO* bio = NULL_PTR;
+  BUF_MEM* bptr = NULL_PTR;
+  ASN1_OBJECT* algo = NULL_PTR;
+  X509_ALGOR* x509_algor = NULL_PTR;
+  STACK_OF(X509_EXTENSION)* exts = sk_X509_EXTENSION_new_null();
 
-  osslCsrCmdKey += " slot_" + std::to_string(slotid_) + "-label_" + key_label;
-  osslCsrCmdSubj += " " + subj;
-  osslCsrCmdOut += " " + out;
-  osslCsrCmdTotal += osslCsrCmdKey + osslCsrCmdSubj + osslCsrCmdOut;
+  x509_req = X509_REQ_new();
+  X509_REQ_set_version(x509_req, 0);
+  x509_name = X509_REQ_get_subject_name(x509_req);
+  X509_NAME_add_entry_by_txt(x509_name, "CN", MBSTRING_ASC,
+                             reinterpret_cast<const unsigned char*>(""), -1, -1, 0);
 
-  ENVOY_LOG(debug, osslCsrCmdTotal.c_str());
-  if (system(osslCsrCmdTotal.c_str()) != 0) {
-    status = CKR_GENERAL_ERROR;
+  addExt(exts, NID_basic_constraints, CA.c_str());
+
+  addExt(exts, NID_key_usage, keyUsage.c_str());
+
+  addExt(exts, NID_ext_key_usage, extKeyUsage.c_str());
+
+  const std::string alt_names = "[alt_names]";
+  std::string altName = "URI:";
+  std::size_t pos = csr_config.find(alt_names);
+  if (pos == std::string::npos) {
+    throw EnvoyException("Failed to search alt_names filed in openssl config!");
+  } else {
+    // to locate the start of alt_names in openssl config
+    pos += alt_names.size() + strlen("\n") + strlen("URI.1 = ");
+    csr_config = csr_config.substr(pos);
+    pos = csr_config.find('\n');
+    if (pos == std::string::npos) {
+      throw EnvoyException("Failed to get alt_names in openssl config!");
+    }
+    altName += csr_config.substr(0, pos);
   }
+  ENVOY_LOG(debug, "alt_names: {}", altName);
+  addExt(exts, NID_subject_alt_name, altName.c_str());
+
+  std::string value = Base64::encode(quote.c_str(), quote.size());
+  ENVOY_LOG(debug, "The quote: {}", value);
+  value = "ASN1:UTF8String:" + value;
+  X509_EXTENSION* pSubExt = X509V3_EXT_nconf(NULL, NULL, quote_key.c_str(), value.c_str());
+  sk_X509_EXTENSION_push(exts, pSubExt);
+
+  value = Base64::encode(quotepub.c_str(), quotepub.size());
+  ENVOY_LOG(debug, "The quote public key: {}", value);
+  value = "ASN1:UTF8String:" + value;
+  pSubExt = X509V3_EXT_nconf(NULL, NULL, quotepub_key.c_str(), value.c_str());
+  sk_X509_EXTENSION_push(exts, pSubExt);
+
+  X509_REQ_add_extensions(x509_req, exts);
+  sk_X509_EXTENSION_pop_free(exts, X509_EXTENSION_free);
+
+  if (isrsa) {
+
+    RSA* rsa = NULL_PTR;
+    BIGNUM* bn_modulus = NULL_PTR;
+    BIGNUM* bn_public_exponent = NULL_PTR;
+    ByteString modulus, exponent;
+
+    status = getRSAPublicKey(pubkey, &modulus, &exponent);
+    if (status != CKR_OK) {
+      ENVOY_LOG(debug, "Error get pubkey\n");
+      return status;
+    }
+
+    rsa = RSA_new();
+    bn_modulus = BN_bin2bn(modulus.bytes, static_cast<int>(modulus.byte_size), NULL_PTR);
+    bn_public_exponent = BN_bin2bn(exponent.bytes, static_cast<int>(exponent.byte_size), NULL_PTR);
+    RSA_set0_key(rsa, bn_modulus, bn_public_exponent, NULL_PTR);
+
+    evp_pkey = EVP_PKEY_new();
+
+    /* Add public key to certificate request */
+    EVP_PKEY_assign(evp_pkey, EVP_PKEY_RSA, rsa);
+
+    X509_REQ_set_pubkey(x509_req, evp_pkey);
+    EVP_PKEY_free(evp_pkey);
+
+    /* Sign certificate request */
+    int req_info_size = i2d_re_X509_REQ_tbs(x509_req, &req_info_buffer);
+
+    status = rsaSign(privkey, pubkey, false, 256, req_info_buffer, req_info_size, &signed_data);
+    if (status != CKR_OK) {
+      ENVOY_LOG(debug, "Error sign x509_req\n");
+      return status;
+    }
+
+    algo = OBJ_nid2obj(NID_sha256WithRSAEncryption);
+  } else {
+    EC_KEY* ec = NULL_PTR;
+    const EC_GROUP* ec_group = NULL_PTR;
+    EC_POINT* ec_points = NULL_PTR;
+    ByteString group, points;
+    const EVP_MD* md = EVP_sha256();
+    unsigned char hash[EVP_MAX_MD_SIZE];
+    unsigned int hash_len;
+
+    status = getECDSAPublicKey(pubkey, &group, &points);
+    if (status != CKR_OK) {
+      ENVOY_LOG(debug, "Error get pubkey\n");
+      return status;
+    }
+
+    ec = d2i_ECParameters(NULL_PTR, const_cast<const uint8_t**>(&group.bytes), group.byte_size);
+    if (ec == NULL_PTR) {
+      ENVOY_LOG(debug, "Error read group\n");
+      return status;
+    }
+    ec_group = EC_KEY_get0_group(ec);
+
+    ByteString raw = octet2Raw(points);
+    size_t len = raw.byte_size;
+    if (len == 0) {
+      ENVOY_LOG(debug, "Error octet2Raw\n");
+      status = CKR_GENERAL_ERROR;
+      return status;
+    }
+
+    ec_points = EC_POINT_new(ec_group);
+    if (!EC_POINT_oct2point(ec_group, ec_points, raw.bytes, raw.byte_size, NULL_PTR)) {
+      EC_POINT_free(ec_points);
+      ENVOY_LOG(debug, "Error oct2point\n");
+      status = CKR_GENERAL_ERROR;
+      return status;
+    }
+
+    if (!EC_KEY_set_public_key(ec, ec_points)) {
+      EC_POINT_free(ec_points);
+      ENVOY_LOG(debug, "Error set ecdsa public key\n");
+      status = CKR_GENERAL_ERROR;
+      return status;
+    }
+
+    EC_POINT_free(ec_points);
+
+    evp_pkey = EVP_PKEY_new();
+
+    /* Add public key to certificate request */
+    EVP_PKEY_assign_EC_KEY(evp_pkey, ec);
+    X509_REQ_set_pubkey(x509_req, evp_pkey);
+    EVP_PKEY_free(evp_pkey);
+
+    /* Sign certificate request */
+    int req_info_size = i2d_re_X509_REQ_tbs(x509_req, &req_info_buffer);
+
+    calculateDigest(md, req_info_buffer, req_info_size, hash, &hash_len);
+    status = ecdsaSign(privkey, pubkey, hash, hash_len, &signed_data);
+
+    len = signed_data.byte_size / 2;
+
+    BIGNUM* r = BN_bin2bn(signed_data.bytes, len, NULL_PTR);
+    BIGNUM* s = BN_bin2bn(signed_data.bytes + len, len, NULL_PTR);
+
+    free(signed_data.bytes);
+
+    ECDSA_SIG* sig = ECDSA_SIG_new();
+    ECDSA_SIG_set0(sig, r, s);
+
+    signed_data.bytes = NULL_PTR;
+    signed_data.byte_size = i2d_ECDSA_SIG(sig, &signed_data.bytes);
+    ECDSA_SIG_free(sig);
+
+    algo = OBJ_nid2obj(NID_ecdsa_with_SHA256);
+  }
+
+  x509_algor = X509_ALGOR_new();
+  X509_ALGOR_set0(x509_algor, algo, V_ASN1_NULL, NULL_PTR);
+  X509_REQ_set1_signature_algo(x509_req, x509_algor);
+  X509_REQ_set1_signature_value(x509_req, signed_data.bytes, signed_data.byte_size);
+  free(signed_data.bytes);
+
+  bio = BIO_new(BIO_s_mem());
+  PEM_write_bio_X509_REQ(bio, x509_req);
+  BIO_get_mem_ptr(bio, &bptr);
+  int len = bptr->length;
+  auto pem = static_cast<char*>(malloc(len + 1));
+  if (pem == NULL_PTR) {
+    BIO_free(bio);
+    return CKR_HOST_MEMORY;
+  }
+
+  memset(pem, 0, len + 1);
+  BIO_read(bio, pem, len);
+
+  out = std::string(pem);
+  free(pem);
+  BIO_free(bio);
   return status;
 }
 

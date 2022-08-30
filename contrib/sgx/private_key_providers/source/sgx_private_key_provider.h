@@ -128,6 +128,7 @@ private:
   std::string quotepub_;
   std::string quote_key_;
   std::string quotepub_key_;
+  std::string csr_;
 
   // related to SGX
   SgxContextSharedPtr sgx_context_;
