@@ -86,49 +86,11 @@ void SgxPrivateKeyMethodProvider::initializeKeypair() {
 
 void SgxPrivateKeyMethodProvider::createCSR() {
   CK_RV status = CKR_OK;
-
-  std::string csr_config_filename = "/etc/sgx/";
-  if (::access(csr_config_filename.c_str(), 0) != 0) {
-    if (::mkdir(csr_config_filename.c_str(), 0) != 0) {
-      throw EnvoyException("Failed to create path in " + csr_config_filename);
-    } else {
-      ENVOY_LOG(debug, "sgx private key provider: created dir " + csr_config_filename);
-    }
-  }
-  csr_config_filename += "pkcs11.conf";
-  std::ofstream output_file(csr_config_filename, std::ios::trunc);
-  if (!output_file.is_open()) {
-    throw EnvoyException("Failed to open openssl config in " + csr_config_filename);
-  }
-  std::string v3_req = "[v3_req]";
-  std::size_t pos = csr_config_.find(v3_req);
-  if (pos == std::string::npos) {
-    throw EnvoyException("Failed to search v3_req filed in openssl config: " + csr_config_filename);
-  } else {
-    pos += v3_req.size();
-    std::string new_csr_config = csr_config_.substr(0, pos) + "\n";
-    std::string value = Base64::encode(quote_.c_str(), quote_.size());
-    ENVOY_LOG(debug, "The quote: {}", value);
-    new_csr_config += quote_key_ + " = ASN1:UTF8String:" + value + "\n";
-    value = Base64::encode(quotepub_.c_str(), quotepub_.size());
-    ENVOY_LOG(debug, "The quote public key: {}", value);
-    new_csr_config += quotepub_key_ + " = ASN1:UTF8String:" + value + csr_config_.substr(pos);
-    output_file << new_csr_config;
-  }
-  output_file.close();
-
-  std::string csr_filename = "/etc/sgx/pkcs11.csr";
-
-  std::string subj = "/CN=";
-
-  ENVOY_LOG(debug, "sgx private key provider: the CSR file does not exist. Now create it.");
-
-  status = sgx_context_->createCSR(subj, key_label_, csr_filename);
+  status = sgx_context_->createCSR((key_type_ == "rsa"), public_key_, private_key_, csr_config_,
+                                   quote_, quote_key_, quotepub_, quotepub_key_, csr_);
   if (status != CKR_OK) {
     throw EnvoyException("Failed to create CSR.");
   }
-
-  std::remove(csr_config_filename.c_str());
 }
 
 void SgxPrivateKeyMethodProvider::createQuote() {
@@ -157,20 +119,8 @@ void SgxPrivateKeyMethodProvider::createQuote() {
 
 void SgxPrivateKeyMethodProvider::sendCSRandQuote() {
   CsrAndQuoteRequest req;
-  std::string csr_filename = "/etc/sgx/pkcs11.csr";
 
-  std::ifstream csr_file(csr_filename, std::ios::in | std::ios::binary);
-  if (!csr_file) {
-    throw EnvoyException("sgx private key provider: open CSR file error");
-  }
-
-  ENVOY_LOG(debug, "sgx private key provider: read CSR file from disk");
-
-  std::stringstream buf;
-  buf << csr_file.rdbuf();
-  csr_file.close();
-
-  req.set_csr(buf.str());
+  req.set_csr(csr_);
 
   client_->send(std::move(req), false);
 }
@@ -187,19 +137,11 @@ void SgxPrivateKeyMethodProvider::initialize(
 
   if (stage_ == "init") {
 
-    std::string csr_filename = "/etc/sgx/pkcs11.csr";
+    createQuote();
+    ENVOY_LOG(debug, "sgx private key provider: createQuote() finished");
 
-    std::ifstream csr_file(csr_filename, std::ios::in | std::ios::binary);
-    if (!csr_file.is_open()) {
-      createQuote();
-      ENVOY_LOG(debug, "sgx private key provider: createQuote() finished");
-
-      createCSR();
-      ENVOY_LOG(debug, "sgx private key provider: createCSR() finished");
-    } else {
-      ENVOY_LOG(debug, "sgx private key provider: the CSR file already exists. Skip.");
-    }
-    csr_file.close();
+    createCSR();
+    ENVOY_LOG(debug, "sgx private key provider: createCSR() finished");
 
     initializeRpc(config, context);
     ENVOY_LOG(debug, "sgx private key provider: initializeRpc() finished");
