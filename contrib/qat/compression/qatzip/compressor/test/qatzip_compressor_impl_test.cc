@@ -40,7 +40,7 @@ protected:
     Stats::IsolatedStoreImpl stats_store{};
     Compression::Gzip::Decompressor::ZlibDecompressorImpl decompressor(stats_store, "test.",
                                                                        chunk_size);
-    // Window bits = 31
+    // Window bits = 31 (15 for maximum window bits + 16 for gzip).
     decompressor.init(31);
 
     decompressor.decompress(accumulation_buffer, buffer);
@@ -49,7 +49,21 @@ protected:
     ASSERT_EQ(original_text.length(), decompressed_text.length());
     EXPECT_EQ(original_text, decompressed_text);
   }
-  uint32_t default_input_size_{796};
+
+  Envoy::Compression::Compressor::CompressorFactoryPtr
+  createQatzipCompressorFactoryFromConfig(const std::string& json) {
+    envoy::extensions::compression::qatzip::compressor::v3alpha::Qatzip qatzip_config;
+    TestUtility::loadFromJson(json, qatzip_config);
+
+    return qatzip_compressor_library_factory_.createCompressorFactoryFromProto(qatzip_config,
+                                                                               context_);
+  }
+  // A value which has an impact on the size of random input created for the tests that use
+  // verifyWithDecompressor.
+  static constexpr uint32_t default_input_size_{796};
+
+  QatzipCompressorLibraryFactory qatzip_compressor_library_factory_;
+  NiceMock<Server::Configuration::MockFactoryContext> context_;
 };
 
 class QatzipConfigTest
@@ -59,7 +73,7 @@ class QatzipConfigTest
 // These tests should pass even if required hardware or setup steps required for qatzip are missing.
 // Qatzip uses a sofware fallback in this case.
 INSTANTIATE_TEST_SUITE_P(QatzipConfigTestInstantiation, QatzipConfigTest,
-                         // First tuple has all default values
+                         // First tuple has all default values.
                          ::testing::Values(std::make_tuple(1, "DEFAULT", 1024, 131072, 4096),
                                            std::make_tuple(2, "DEFAULT", 128, 131072, 4096),
                                            std::make_tuple(3, "DEFAULT", 524288, 131072, 4096),
@@ -84,18 +98,62 @@ TEST_P(QatzipConfigTest, LoadConfigAndVerifyWithDecompressor) {
                                std::get<2>(config_value_tuple), std::get<3>(config_value_tuple),
                                chunk_size)};
 
-  envoy::extensions::compression::qatzip::compressor::v3alpha::Qatzip qatzip_config;
-  TestUtility::loadFromJson(json, qatzip_config);
-
-  NiceMock<Server::Configuration::MockFactoryContext> context;
-  QatzipCompressorLibraryFactory qatzip_compressor_library_factory;
   Envoy::Compression::Compressor::CompressorFactoryPtr qatzip_compressor_factory =
-      qatzip_compressor_library_factory.createCompressorFactoryFromProto(qatzip_config, context);
+      createQatzipCompressorFactoryFromConfig(json);
 
   EXPECT_EQ("gzip", qatzip_compressor_factory->contentEncoding());
   EXPECT_EQ("qatzip.", qatzip_compressor_factory->statsPrefix());
 
   verifyWithDecompressor(qatzip_compressor_factory->createCompressor(), chunk_size);
+}
+
+class InvalidQatzipConfigTest
+    : public QatzipCompressorImplTest,
+      public ::testing::WithParamInterface<std::tuple<int, std::string, int, int, int>> {};
+
+// Tests with invalid qatzip configs.
+INSTANTIATE_TEST_SUITE_P(
+    InvalidQatzipConfigTestInstantiation, InvalidQatzipConfigTest,
+    // This tuple has all default values: std::make_tuple(1, "DEFAULT", 1024, 131072, 4096).
+    ::testing::Values(std::make_tuple(0, "DEFAULT", 1024, 131072, 4096),
+                      std::make_tuple(10, "DEFAULT", 1024, 131072, 4096),
+                      std::make_tuple(1, "DEFAULT", 127, 131072, 4096),
+                      std::make_tuple(1, "DEFAULT", 524289, 131072, 4096),
+                      std::make_tuple(1, "DEFAULT", 1024, 1023, 4096),
+                      std::make_tuple(1, "DEFAULT", 1024, 2092033, 4096),
+                      std::make_tuple(1, "DEFAULT", 1024, 131072, 4095),
+                      std::make_tuple(1, "DEFAULT", 1024, 131072, 65537)));
+
+TEST_P(InvalidQatzipConfigTest, LoadConfigWithInvalidValues) {
+  std::tuple<int, std::string, int, int, int> config_value_tuple = GetParam();
+  int chunk_size = std::get<4>(config_value_tuple);
+  std::string json{fmt::format(R"EOF({{
+  "compression_level": {},
+  "hardware_buffer_size": "{}",
+  "input_size_threshold": {},
+  "stream_buffer_size": {},
+  "chunk_size": {}
+}})EOF",
+                               std::get<0>(config_value_tuple), std::get<1>(config_value_tuple),
+                               std::get<2>(config_value_tuple), std::get<3>(config_value_tuple),
+                               chunk_size)};
+
+  EXPECT_THROW_WITH_REGEX(createQatzipCompressorFactoryFromConfig(json), EnvoyException,
+                          "Proto constraint validation failed");
+}
+
+TEST_F(QatzipCompressorImplTest, LoadConfigWithInvalidHardwareBufferSize) {
+  std::string json(R"EOF({
+  "compression_level": 1,
+  "hardware_buffer_size": "SZ_513K",
+  "input_size_threshold": 1024,
+  "stream_buffer_size": 131072,
+  "chunk_size": 4096
+})EOF");
+
+  EXPECT_THROW_WITH_REGEX(
+      createQatzipCompressorFactoryFromConfig(json), EnvoyException,
+      R"EOF(INVALID_ARGUMENT\:\(hardware_buffer_size\)\: invalid value \"SZ_513K\")EOF");
 }
 
 } // namespace Compressor
