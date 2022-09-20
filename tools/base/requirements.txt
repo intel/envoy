@@ -343,9 +343,9 @@ envoy-distribution-release==0.0.8 \
     --hash=sha256:60c20f5b74780c46e0d813d1a7fc1af53805cf2c51139badbee39374fcf6c5a9 \
     --hash=sha256:7d54b0364d9f1bb22d81f1280822eceb96ff400566838fe37579f49d8f55be24
     # via -r requirements.in
-envoy-distribution-repo==0.0.5 \
-    --hash=sha256:6ee86168a83758ef6ed0884c9ca17fdcec5517a24c13b13c4e3ed10609f3b49e \
-    --hash=sha256:cc2e9504d0769b82404b94bb14a35cb536a2d2a3742d5aeeeeba5cd17684a75b
+envoy-distribution-repo==0.0.7 \
+    --hash=sha256:03f43b998bba062d312b0368973f152e7b30392e95870fb19ddb99eb53af2f10 \
+    --hash=sha256:14cd64b96606a426f2888e94a0177361d79c6ae287d2429f20d1d919c85f4c93
     # via -r requirements.in
 envoy-distribution-verify==0.0.8 \
     --hash=sha256:218fbd757abc3ef1745a87525a78723f307fa6ca52bd4f7d5fee4a9c3a90d906 \
