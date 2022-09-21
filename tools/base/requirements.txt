@@ -347,9 +347,9 @@ envoy-distribution-repo==0.0.5 \
     --hash=sha256:6ee86168a83758ef6ed0884c9ca17fdcec5517a24c13b13c4e3ed10609f3b49e \
     --hash=sha256:cc2e9504d0769b82404b94bb14a35cb536a2d2a3742d5aeeeeba5cd17684a75b
     # via -r requirements.in
-envoy-distribution-verify==0.0.8 \
-    --hash=sha256:218fbd757abc3ef1745a87525a78723f307fa6ca52bd4f7d5fee4a9c3a90d906 \
-    --hash=sha256:b2f719a640fc0a477f591a7704828bd4e2da1da9133562595d276f070d3a14cc
+envoy-distribution-verify==0.0.10 \
+    --hash=sha256:00baf14de232c61fdb50701ad11ad2254aa3aa3dae901f409a5a958a634ecc2b \
+    --hash=sha256:570d7937e6d326922a0f9ce1e7d0dc9e866595a4b7ae0233ef3929278aecaf9d
     # via -r requirements.in
 envoy-docker-utils==0.0.2 \
     --hash=sha256:a12cb57f0b6e204d646cbf94f927b3a8f5a27ed15f60d0576176584ec16a4b76
