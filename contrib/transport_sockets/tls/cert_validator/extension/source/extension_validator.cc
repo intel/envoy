@@ -68,7 +68,7 @@ int ExtensionValidator::initializeSslContexts(std::vector<SSL_CTX*> contexts,
   return default_cert_validator_->initializeSslContexts(contexts, handshaker_provides_certificates);
 }
 
-int ExtensionValidator::doVerifyCertChain(
+int ExtensionValidator::doSynchronousVerifyCertChain(
     X509_STORE_CTX* store_ctx, Ssl::SslExtendedSocketInfo* ssl_extended_info, X509& leaf_cert,
     const Network::TransportSocketOptions* transport_socket_options) {
 
@@ -93,11 +93,11 @@ int ExtensionValidator::doVerifyCertChain(
   ENVOY_LOG_TO_LOGGER(Logger::Registry::getLog(Logger::Id::connection), info,
                       "The customized certificate extension has been verified");
 
-  return default_cert_validator_->doVerifyCertChain(store_ctx, ssl_extended_info, leaf_cert,
+  return default_cert_validator_->doSynchronousVerifyCertChain(store_ctx, ssl_extended_info, leaf_cert,
                                                     transport_socket_options);
 }
 
-size_t ExtensionValidator::daysUntilFirstCertExpires() const {
+absl::optional<uint32_t> ExtensionValidator::daysUntilFirstCertExpires() const {
   return default_cert_validator_->daysUntilFirstCertExpires();
 }
 
@@ -150,7 +150,7 @@ public:
     return std::make_unique<ExtensionValidator>(config, stats, time_source);
   }
 
-  absl::string_view name() override { return "envoy.tls.cert_validator.extension"; }
+  std::string name() const override { return "envoy.tls.cert_validator.extension"; }
 };
 
 REGISTER_FACTORY(ExtensionValidatorFactory, CertValidatorFactory);
