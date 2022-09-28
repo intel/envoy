@@ -40,7 +40,7 @@ by the latest release of Istio. The branch will be named after Istio
 release version numbers. For example, Envoy version 1.23, which is used
 by Istio version 1.15, will be tracked in Envoy in a branch named
 release-1.15-intel. The releases will be tagged with a similar naming
-scheme for example release-1.15.3-intel.2, which would indicate Envoy
+scheme for example 1.15.3-intel.2, which would indicate Envoy
 used by the second Intel distribution for Istio release done on top of
 Istio upstream 1.15.3 release.
 
