@@ -386,8 +386,8 @@ void testUtil(const TestUtilOptions& options) {
         // configureInitialCongestionWindow is an unimplemented empty function, this is just to
         // increase code coverage.
         ssl_socket->configureInitialCongestionWindow(100, std::chrono::microseconds(123));
-        server_connection = dispatcher->createServerConnection(std::move(socket),
-                                                               std::move(ssl_socket), stream_info);
+        server_connection = dispatcher->createServerConnection(
+            std::move(socket), std::move(ssl_socket), stream_info, server_ssl_socket_factory);
         server_connection->addConnectionCallbacks(server_connection_callbacks);
       }));
 
@@ -4003,7 +4003,11 @@ TEST_P(SslSocketTest, ClientAuthCrossListenerSessionResumption) {
                 ? server_ssl_socket_factory
                 : server2_ssl_socket_factory;
         server_connection = dispatcher_->createServerConnection(
-            std::move(accepted_socket), tsf.createDownstreamTransportSocket(), stream_info_);
+            std::move(accepted_socket), tsf.createDownstreamTransportSocket(), stream_info_,
+            accepted_socket->connectionInfoProvider().localAddress() ==
+                    socket->connectionInfoProvider().localAddress()
+                ? server_ssl_socket_factory
+                : server2_ssl_socket_factory);
         server_connection->addConnectionCallbacks(server_connection_callbacks);
       }));
 

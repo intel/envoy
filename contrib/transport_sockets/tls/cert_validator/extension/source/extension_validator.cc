@@ -93,8 +93,8 @@ int ExtensionValidator::doSynchronousVerifyCertChain(
   ENVOY_LOG_TO_LOGGER(Logger::Registry::getLog(Logger::Id::connection), info,
                       "The customized certificate extension has been verified");
 
-  return default_cert_validator_->doSynchronousVerifyCertChain(store_ctx, ssl_extended_info, leaf_cert,
-                                                    transport_socket_options);
+  return default_cert_validator_->doSynchronousVerifyCertChain(store_ctx, ssl_extended_info,
+                                                               leaf_cert, transport_socket_options);
 }
 
 absl::optional<uint32_t> ExtensionValidator::daysUntilFirstCertExpires() const {

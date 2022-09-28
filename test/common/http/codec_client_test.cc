@@ -26,6 +26,7 @@
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
 
+using Network::Test::createRawBufferSocketFactory;
 using testing::_;
 using testing::AtMost;
 using testing::Invoke;
@@ -301,12 +302,13 @@ public:
     codec_ = new Http::MockClientConnection();
     client_ = std::make_unique<CodecClientForTest>(CodecType::HTTP1, std::move(client_connection),
                                                    codec_, nullptr, host_, *dispatcher_);
+    factory_ = Network::Test::createRawBufferDownstreamSocketFactory();
 
     int expected_callbacks = 2;
     EXPECT_CALL(listener_callbacks_, onAccept_(_))
         .WillOnce(Invoke([&](Network::ConnectionSocketPtr& socket) -> void {
           upstream_connection_ = dispatcher_->createServerConnection(
-              std::move(socket), Network::Test::createRawBufferSocket(), stream_info_);
+              std::move(socket), Network::Test::createRawBufferSocket(), stream_info_, *factory_);
           upstream_connection_->addConnectionCallbacks(upstream_callbacks_);
 
           expected_callbacks--;
@@ -368,6 +370,7 @@ protected:
   NiceMock<MockRequestEncoder> inner_encoder_;
   NiceMock<MockResponseDecoder> outer_decoder_;
   StreamInfo::StreamInfoImpl stream_info_;
+  Envoy::Network::DownstreamTransportSocketFactoryPtr factory_;
 };
 
 // Send a block of data from upstream, and ensure it is received by the codec.

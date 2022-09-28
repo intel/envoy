@@ -15,7 +15,8 @@ namespace Event {
 // override the behavior of a few.
 class WrappedDispatcher : public Dispatcher {
 public:
-  WrappedDispatcher(Dispatcher& impl) : impl_(impl) {}
+  WrappedDispatcher(Dispatcher& impl)
+      : impl_(impl), factory_(Network::Test::createRawBufferDownstreamSocketFactory()) {}
 
   // Event::Dispatcher
   const std::string& name() override { return impl_.name(); }
@@ -37,8 +38,8 @@ public:
   createServerConnection(Network::ConnectionSocketPtr&& socket,
                          Network::TransportSocketPtr&& transport_socket,
                          StreamInfo::StreamInfo& stream_info) override {
-    return impl_.createServerConnection(std::move(socket), std::move(transport_socket),
-                                        stream_info);
+    return impl_.createServerConnection(std::move(socket), std::move(transport_socket), stream_info,
+                                        *factory_);
   }
 
   Network::ClientConnectionPtr createClientConnection(
@@ -127,6 +128,7 @@ public:
 
 protected:
   Dispatcher& impl_;
+  Envoy::Network::DownstreamTransportSocketFactoryPtr factory_;
 };
 
 } // namespace Event

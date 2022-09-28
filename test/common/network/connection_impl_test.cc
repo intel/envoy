@@ -139,7 +139,8 @@ public:
 class ConnectionImplTest : public testing::TestWithParam<Address::IpVersion> {
 protected:
   ConnectionImplTest()
-      : api_(Api::createApiForTest(time_system_)), stream_info_(time_system_, nullptr) {}
+      : api_(Api::createApiForTest(time_system_)), stream_info_(time_system_, nullptr),
+        factory_(Network::Test::createRawBufferDownstreamSocketFactory()) {}
 
   ~ConnectionImplTest() override {
     EXPECT_TRUE(timer_destroyed_ || timer_ == nullptr);
@@ -176,7 +177,7 @@ protected:
     EXPECT_CALL(listener_callbacks_, onAccept_(_))
         .WillOnce(Invoke([&](Network::ConnectionSocketPtr& socket) -> void {
           server_connection_ = dispatcher_->createServerConnection(
-              std::move(socket), Network::Test::createRawBufferSocket(), stream_info_);
+              std::move(socket), Network::Test::createRawBufferSocket(), stream_info_, *factory_);
           server_connection_->addConnectionCallbacks(server_callbacks_);
           server_connection_->addReadFilter(read_filter_);
 
@@ -294,6 +295,7 @@ protected:
   Socket::OptionsSharedPtr socket_options_;
   StreamInfo::StreamInfoImpl stream_info_;
   Network::TransportSocketOptionsConstSharedPtr transport_socket_options_ = nullptr;
+  Envoy::Network::DownstreamTransportSocketFactoryPtr factory_;
 };
 
 INSTANTIATE_TEST_SUITE_P(IpVersions, ConnectionImplTest,
@@ -359,7 +361,7 @@ TEST_P(ConnectionImplTest, CloseDuringConnectCallback) {
   EXPECT_CALL(listener_callbacks_, onAccept_(_))
       .WillOnce(Invoke([&](Network::ConnectionSocketPtr& socket) -> void {
         server_connection_ = dispatcher_->createServerConnection(
-            std::move(socket), Network::Test::createRawBufferSocket(), stream_info_);
+            std::move(socket), Network::Test::createRawBufferSocket(), stream_info_, *factory_);
         server_connection_->addConnectionCallbacks(server_callbacks_);
         server_connection_->addReadFilter(read_filter_);
         server_connection_->addReadFilter(add_and_remove_filter);
@@ -386,7 +388,7 @@ TEST_P(ConnectionImplTest, UnregisterRegisterDuringConnectCallback) {
   EXPECT_CALL(listener_callbacks_, onAccept_(_))
       .WillOnce(Invoke([&](Network::ConnectionSocketPtr& socket) -> void {
         server_connection_ = dispatcher_->createServerConnection(
-            std::move(socket), Network::Test::createRawBufferSocket(), stream_info_);
+            std::move(socket), Network::Test::createRawBufferSocket(), stream_info_, *factory_);
         server_connection_->addConnectionCallbacks(server_callbacks_);
         server_connection_->addReadFilter(read_filter_);
 
@@ -545,7 +547,7 @@ TEST_P(ConnectionImplTest, SocketOptions) {
       .WillOnce(Invoke([&](Network::ConnectionSocketPtr& socket) -> void {
         socket->addOption(option);
         server_connection_ = dispatcher_->createServerConnection(
-            std::move(socket), Network::Test::createRawBufferSocket(), stream_info_);
+            std::move(socket), Network::Test::createRawBufferSocket(), stream_info_, *factory_);
         server_connection_->addConnectionCallbacks(server_callbacks_);
         server_connection_->addReadFilter(read_filter_);
 
@@ -2890,7 +2892,7 @@ public:
     EXPECT_CALL(listener_callbacks_, onAccept_(_))
         .WillOnce(Invoke([&](Network::ConnectionSocketPtr& socket) -> void {
           server_connection_ = dispatcher_->createServerConnection(
-              std::move(socket), Network::Test::createRawBufferSocket(), stream_info_);
+              std::move(socket), Network::Test::createRawBufferSocket(), stream_info_, *factory_);
           server_connection_->setBufferLimits(read_buffer_limit);
           server_connection_->addReadFilter(read_filter_);
           EXPECT_EQ("", server_connection_->nextProtocol());

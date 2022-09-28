@@ -40,4 +40,3 @@ message Bumping {
   // Certificate provider instance for fetching TLS certificates.
   transport_sockets.tls.v3.CertificateProviderPluginInstance tls_certificate_provider_instance = 5;
 }
-

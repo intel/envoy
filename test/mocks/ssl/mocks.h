@@ -1,5 +1,7 @@
 #pragma once
 
+#include <gmock/gmock-function-mocker.h>
+
 #include <functional>
 #include <string>
 
@@ -104,6 +106,8 @@ public:
   MOCK_METHOD(const Network::Address::IpList&, tlsKeyLogRemote, (), (const));
   MOCK_METHOD(const std::string&, tlsKeyLogPath, (), (const));
   MOCK_METHOD(AccessLog::AccessLogManager&, accessLogManager, (), (const));
+  MOCK_METHOD(CertificateProvider::CertificateProvider::Capabilities, certProviderCaps, (),
+              (const));
   Ssl::HandshakerCapabilities capabilities_;
   std::string sni_{"default_sni.example.com"};
   std::string ciphers_{"RSA"};
@@ -111,6 +115,7 @@ public:
   std::string test_{};
   Network::Address::IpList iplist_;
   std::string path_{};
+  CertificateProvider::CertificateProvider::Capabilities certificate_provider_capabilities_;
 };
 
 class MockServerContextConfig : public ServerContextConfig {
@@ -182,6 +187,7 @@ public:
               trustChainVerification, (), (const));
   MOCK_METHOD(bool, onlyVerifyLeafCertificateCrl, (), (const));
   MOCK_METHOD(absl::optional<uint32_t>, maxVerifyDepth, (), (const));
+  MOCK_METHOD(Envoy::CertificateProvider::CertificateProviderSharedPtr, caProvider, (), (const));
 };
 
 class MockPrivateKeyMethodManager : public PrivateKeyMethodManager {
