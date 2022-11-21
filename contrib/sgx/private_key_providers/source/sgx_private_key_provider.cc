@@ -17,6 +17,8 @@ namespace Extensions {
 namespace PrivateKeyMethodProvider {
 namespace Sgx {
 
+SINGLETON_MANAGER_REGISTRATION(sgx_context);
+
 SgxPrivateKeyConnection::SgxPrivateKeyConnection(Ssl::PrivateKeyConnectionCallbacks& cb,
                                                  Event::Dispatcher& dispatcher,
                                                  SgxContextSharedPtr sgx_context,
@@ -247,6 +249,14 @@ void SgxPrivateKeyMethodProvider::registerPrivateKeyMethod(SSL* ssl,
   SSL_set_ex_data(ssl, SgxPrivateKeyMethodProvider::connectionIndex(), ops);
 
   ENVOY_LOG(debug,
+            "sgx private key provider: registerPrivateKeyMethod  connectionIndex 1st {}",
+            SgxPrivateKeyMethodProvider::connectionIndex());
+
+  ENVOY_LOG(debug,
+            "sgx private key provider: registerPrivateKeyMethod  connectionIndex 2nd {}",
+            SgxPrivateKeyMethodProvider::connectionIndex());
+
+  ENVOY_LOG(debug,
             "sgx private key provider: PrivateKeyMethod has been registered to dispatcher: {}",
             dispatcher.name());
 }
@@ -317,7 +327,11 @@ SgxPrivateKeyMethodProvider::SgxPrivateKeyMethodProvider(
     throw EnvoyException("Not supported key type, only RSA and ECDSA are supported.");
   }
 
-  sgx_context_ = std::make_shared<SGXContext>(sgx_library_, token_label_, so_pin_, usr_pin_);
+  sgx_context_ = factory_context.singletonManager().getTyped<SGXContext>(
+      SINGLETON_MANAGER_REGISTERED_NAME(sgx_context),
+       [this] { return std::make_shared<SGXContext>(sgx_library_, token_label_, so_pin_, usr_pin_);});
+
+  // sgx_context_ = std::make_shared<SGXContext>(sgx_library_, token_label_, so_pin_, usr_pin_);
 
   initialize();
   ENVOY_LOG(debug, "sgx private key provider: {} has been Created", sgx->name());

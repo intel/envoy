@@ -35,6 +35,11 @@ CK_RV SGXContext::sgxInit() {
 
   CK_RV status = CKR_OK;
 
+  if ( initialized_ == true) {
+    ENVOY_LOG(debug, "sgx: The enclave has been initialized, skip initialization.");
+    return status;
+  }
+
   ENVOY_LOG(debug, "sgx: The enclave has not been initialized. Now we are going to initialize it.");
 
   if (libpath_.empty() || tokenlabel_.empty() || sopin_.empty() || userpin_.empty() ||
@@ -78,6 +83,8 @@ CK_RV SGXContext::sgxInit() {
     ENVOY_LOG(debug, "Error during C_Login: {}.\n", status);
     return status;
   }
+
+  initialized_ = true;
 
   return CKR_OK;
 }
@@ -147,6 +154,8 @@ CK_RV SGXContext::findToken() {
     return status;
   }
 
+  ENVOY_LOG(debug, "findToken slot_count: {}.\n", slot_count);
+
   memset(padded_token_label, ' ', maxTokenLabelSize);
 
   memcpy(padded_token_label, tokenlabel_.c_str(), // NOLINT(safe-memcpy)
@@ -161,6 +170,8 @@ CK_RV SGXContext::findToken() {
       ENVOY_LOG(debug, "Failed to get slot token info: {}.\n", status);
       return status;
     }
+
+    ENVOY_LOG(debug, "findToken slot id: {}.\n", p_slot_list[i]);
 
     if (strncmp(reinterpret_cast<const char*>(const_cast<unsigned char*>(tokenInfo.label)),
                 padded_token_label, maxTokenLabelSize) == 0) {

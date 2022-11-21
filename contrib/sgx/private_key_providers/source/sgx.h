@@ -6,6 +6,7 @@
 #include <string>
 
 #include "envoy/common/pure.h"
+#include "envoy/singleton/manager.h"
 
 #include "source/common/common/logger.h"
 
@@ -77,7 +78,7 @@ struct ByteString {
 /**
  * Represents a single SGX operation context.
  */
-class SGXContext : public Logger::Loggable<Logger::Id::secret> {
+class SGXContext : public Logger::Loggable<Logger::Id::secret>, public Singleton::Instance {
 public:
   SGXContext(std::string libpath, std::string token_label, std::string sopin, std::string user_pin);
 
@@ -106,6 +107,8 @@ private:
                 std::string& keylabel, CK_ULONG attribscount);
 
   CK_RV findToken();
+
+  bool initialized_ = false;
 
   std::string libpath_;
   std::string tokenlabel_;
