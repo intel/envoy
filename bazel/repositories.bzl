@@ -186,6 +186,8 @@ def envoy_dependencies(skip_targets = []):
     _com_github_unicode_org_icu()
     _com_github_intel_ipp_crypto_crypto_mb()
     _com_github_intel_qatlib()
+    _com_github_intel_qatzip()
+    _com_github_lz4_lz4()
     _com_github_jbeder_yaml_cpp()
     _com_github_libevent_libevent()
     _com_github_luajit_luajit()
@@ -197,6 +199,7 @@ def envoy_dependencies(skip_targets = []):
     _com_github_tencent_rapidjson()
     _com_github_nlohmann_json()
     _com_github_ncopa_suexec()
+    _com_github_yasm_yasm()
     _com_google_absl()
     _com_google_googletest()
     _com_google_protobuf()
@@ -404,11 +407,27 @@ def _com_github_intel_qatlib():
         name = "com_github_intel_qatlib",
         build_file_content = BUILD_ALL_CONTENT,
         patch_args = ["-p1"],
-        patches = [
-            "@envoy//bazel/foreign_cc:qatlib-0001-qat-Enable-disable-systemd-support-with-configure.ac.patch",
-            "@envoy//bazel/foreign_cc:qatlib-0002-qatlib-Remove-remaining-shared-flags.patch",
-            "@envoy//bazel/foreign_cc:qatlib-0003-configure-Check-if-pkg-config-is-installed-before-us.patch",
-        ],
+        patches = ["@envoy//bazel/foreign_cc:qatlib-0001-autoconf-get-exact-path-to-YASM-binary.patch"],
+    )
+
+def _com_github_yasm_yasm():
+    external_http_archive(
+        name = "com_github_yasm_yasm",
+        build_file_content = BUILD_ALL_CONTENT,
+        patch_args = ["-p1"],
+        patches = ["@envoy//bazel/foreign_cc:yasm-0001-Remove-__DATE__-from-version-string.patch"],
+    )
+
+def _com_github_intel_qatzip():
+    external_http_archive(
+        name = "com_github_intel_qatzip",
+        build_file_content = BUILD_ALL_CONTENT,
+    )
+
+def _com_github_lz4_lz4():
+    external_http_archive(
+        name = "com_github_lz4_lz4",
+        build_file_content = BUILD_ALL_CONTENT,
     )
 
 def _com_github_jbeder_yaml_cpp():
