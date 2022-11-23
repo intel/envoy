@@ -1,5 +1,6 @@
 load("//bazel:envoy_build_system.bzl", "envoy_cmake", "envoy_package")
 load("@rules_foreign_cc//foreign_cc:configure.bzl", "configure_make")
+load("@rules_foreign_cc//foreign_cc:make.bzl", "make")
 
 licenses(["notice"])  # Apache 2
 
@@ -50,12 +51,30 @@ cc_library(
     ],
 )
 
+make(
+    name = "lz4",
+    args = [
+        "MOREFLAGS='-fPIC'",
+        "BUILD_SHARED=no",
+    ],
+    lib_source = "@com_github_lz4_lz4//:all",
+    out_static_libs = [
+        "liblz4.a",
+    ],
+    targets = [
+        "lib",
+        "install",
+    ],
+    visibility = ["//visibility:public"],
+    alwayslink = False,
+)
+
 # Kafka client dependency used by Kafka-mesh filter.
 # librdkafka build generates extra headers that need to be copied into source to get it to compile.
 configure_make(
     name = "librdkafka_build",
     configure_in_place = True,
-    configure_options = ["--disable-ssl --disable-gssapi --disable-lz4-ext --disable-zstd && cp Makefile.config src/.. && cp config.h src/.."],
+    configure_options = ["--disable-ssl --disable-gssapi --disable-zstd && cp Makefile.config src/.. && cp config.h src/.."],
     lib_source = "@edenhill_librdkafka//:all",
     out_static_libs = [
         "librdkafka.a",
@@ -65,6 +84,7 @@ configure_make(
     targets = [
         "ARFLAGS='' libs install-subdirs",
     ],
+    deps = [":lz4"],
     alwayslink = True,
 )
 
