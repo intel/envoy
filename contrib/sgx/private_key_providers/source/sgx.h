@@ -9,6 +9,8 @@
 #include "envoy/singleton/manager.h"
 
 #include "source/common/common/logger.h"
+#include "source/common/common/lock_guard.h"
+#include "source/common/common/thread.h"
 
 #include "contrib/sgx/private_key_providers/source/utility.h"
 #include "openssl/rsa.h"
@@ -109,6 +111,7 @@ private:
   CK_RV findToken();
 
   bool initialized_ = false;
+  Thread::MutexBasicLockable init_lock_{};
 
   std::string libpath_;
   std::string tokenlabel_;
