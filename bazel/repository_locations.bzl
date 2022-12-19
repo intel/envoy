@@ -1413,6 +1413,8 @@ REPOSITORY_LOCATIONS_SPEC = dict(
         use_category = ["dataplane_ext"],
         release_date = "2022-01-27",
         extensions = ["envoy.compression.qatzip.compressor", "envoy.tls.key_providers.qat"],
+        cpe = "N/A",
+    ),
     pkcs11 = dict(
         project_name = "PKCS #11",
         project_desc = "PKCS #11 Cryptographic Token Interface Base Specification",
