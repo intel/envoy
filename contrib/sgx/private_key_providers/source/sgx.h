@@ -84,7 +84,7 @@ class SGXContext : public Logger::Loggable<Logger::Id::secret>, public Singleton
 public:
   SGXContext(std::string libpath, std::string token_label, std::string sopin, std::string user_pin);
 
-  ~SGXContext();
+  ~SGXContext() override;
 
   CK_RV sgxInit();
 
