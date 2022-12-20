@@ -1393,6 +1393,18 @@ REPOSITORY_LOCATIONS_SPEC = dict(
         license = "Apache-2.0",
         license_url = "https://github.com/bazelbuild/rules_license/blob/{version}/LICENSE",
     ),
+    pkcs11 = dict(
+        project_name = "PKCS #11",
+        project_desc = "PKCS #11 Cryptographic Token Interface Base Specification",
+        project_url = "http://docs.oasis-open.org/pkcs11/pkcs11-base/v2.40/pkcs11-base-v2.40.html",
+        version = "2.40",
+        sha256 = "676fc5ae927c15536453d34848f5dde3726d9c26d39a1032bcb7c7a3060fe255",
+        urls = ["http://docs.oasis-open.org/pkcs11/pkcs11-base/v2.40/errata01/os/pkcs11-base-v2.40-errata01-os.zip"],
+        use_category = ["dataplane_ext"],
+        extensions = ["envoy.tls.key_providers.sgx"],
+        release_date = "2016-05-13",
+        cpe = "N/A",
+    ),
 )
 
 def _compiled_protoc_deps(locations, versions):
