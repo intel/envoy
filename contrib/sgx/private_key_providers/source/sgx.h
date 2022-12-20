@@ -8,8 +8,8 @@
 #include "envoy/common/pure.h"
 #include "envoy/singleton/manager.h"
 
-#include "source/common/common/logger.h"
 #include "source/common/common/lock_guard.h"
+#include "source/common/common/logger.h"
 #include "source/common/common/thread.h"
 
 #include "contrib/sgx/private_key_providers/source/utility.h"

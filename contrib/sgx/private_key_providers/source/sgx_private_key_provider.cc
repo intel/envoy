@@ -248,12 +248,10 @@ void SgxPrivateKeyMethodProvider::registerPrivateKeyMethod(SSL* ssl,
                                           private_key_, public_key_);
   SSL_set_ex_data(ssl, SgxPrivateKeyMethodProvider::connectionIndex(), ops);
 
-  ENVOY_LOG(debug,
-            "sgx private key provider: registerPrivateKeyMethod  connectionIndex 1st {}",
+  ENVOY_LOG(debug, "sgx private key provider: registerPrivateKeyMethod  connectionIndex 1st {}",
             SgxPrivateKeyMethodProvider::connectionIndex());
 
-  ENVOY_LOG(debug,
-            "sgx private key provider: registerPrivateKeyMethod  connectionIndex 2nd {}",
+  ENVOY_LOG(debug, "sgx private key provider: registerPrivateKeyMethod  connectionIndex 2nd {}",
             SgxPrivateKeyMethodProvider::connectionIndex());
 
   ENVOY_LOG(debug,
@@ -328,8 +326,9 @@ SgxPrivateKeyMethodProvider::SgxPrivateKeyMethodProvider(
   }
 
   sgx_context_ = factory_context.singletonManager().getTyped<SGXContext>(
-      SINGLETON_MANAGER_REGISTERED_NAME(sgx_context),
-       [this] { return std::make_shared<SGXContext>(sgx_library_, token_label_, so_pin_, usr_pin_);});
+      SINGLETON_MANAGER_REGISTERED_NAME(sgx_context), [this] {
+        return std::make_shared<SGXContext>(sgx_library_, token_label_, so_pin_, usr_pin_);
+      });
 
   // sgx_context_ = std::make_shared<SGXContext>(sgx_library_, token_label_, so_pin_, usr_pin_);
 

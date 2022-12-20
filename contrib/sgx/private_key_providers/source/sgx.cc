@@ -34,7 +34,7 @@ SGXContext::~SGXContext() {
 CK_RV SGXContext::sgxInit() {
   Thread::LockGuard init_lock(init_lock_);
   CK_RV status = CKR_OK;
-  if ( initialized_ == true) {
+  if (initialized_ == true) {
     ENVOY_LOG(debug, "sgx: The enclave has been initialized, skip initialization.");
     return status;
   }
