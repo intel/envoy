@@ -53,6 +53,9 @@ public:
   AccessLog::AccessLogManager& accessLogManager() override {
     return server_context_.accessLogManager();
   }
+  CertificateProvider::CertificateProviderManager& certificateProviderManager() override {
+    return cluster_manager_.clusterManagerFactory().certificateProviderManager();
+  }
 
 private:
   Server::Configuration::ServerFactoryContext& server_context_;
