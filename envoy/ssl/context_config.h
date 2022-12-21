@@ -111,6 +111,11 @@ public:
    * @return the access log manager object reference
    */
   virtual AccessLog::AccessLogManager& accessLogManager() const PURE;
+
+  /**
+   * @return the set of capabilities for Certificate Provider instance specified in this context
+   */
+  virtual CertificateProvider::CertificateProvider::Capabilities certProviderCaps() const PURE;
 };
 
 class ClientContextConfig : public virtual ContextConfig {
@@ -184,6 +189,12 @@ public:
    * @return True if stateless TLS session resumption is disabled, false otherwise.
    */
   virtual bool disableStatelessSessionResumption() const PURE;
+
+  /**
+   * @return True if we allow full scan certificates when there is no cert matching SNI during
+   * downstream TLS handshake, false otherwise.
+   */
+  virtual bool fullScanCertsOnSNIMismatch() const PURE;
 };
 
 using ServerContextConfigPtr = std::unique_ptr<ServerContextConfig>;

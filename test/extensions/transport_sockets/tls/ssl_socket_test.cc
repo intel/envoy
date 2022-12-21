@@ -31,6 +31,11 @@
 #include "test/extensions/transport_sockets/tls/test_data/san_dns3_cert_info.h"
 #include "test/extensions/transport_sockets/tls/test_data/san_dns4_cert_info.h"
 #include "test/extensions/transport_sockets/tls/test_data/san_dns_cert_info.h"
+#include "test/extensions/transport_sockets/tls/test_data/san_dns_ecdsa_1_cert_info.h"
+#include "test/extensions/transport_sockets/tls/test_data/san_dns_rsa_1_cert_info.h"
+#include "test/extensions/transport_sockets/tls/test_data/san_dns_rsa_2_cert_info.h"
+#include "test/extensions/transport_sockets/tls/test_data/san_multiple_dns_1_cert_info.h"
+#include "test/extensions/transport_sockets/tls/test_data/san_multiple_dns_cert_info.h"
 #include "test/extensions/transport_sockets/tls/test_data/san_uri_cert_info.h"
 #include "test/extensions/transport_sockets/tls/test_data/selfsigned_ecdsa_p256_cert_info.h"
 #include "test/extensions/transport_sockets/tls/test_private_key_method_provider.h"
@@ -377,14 +382,15 @@ void testUtil(const TestUtilOptions& options) {
   Network::ConnectionPtr server_connection;
   Network::MockConnectionCallbacks server_connection_callbacks;
   NiceMock<StreamInfo::MockStreamInfo> stream_info;
+  NiceMock<Network::MockDownstreamTransportSocketFactory> transport_factory;
   EXPECT_CALL(callbacks, onAccept_(_))
       .WillOnce(Invoke([&](Network::ConnectionSocketPtr& socket) -> void {
         auto ssl_socket = server_ssl_socket_factory.createDownstreamTransportSocket();
         // configureInitialCongestionWindow is an unimplemented empty function, this is just to
         // increase code coverage.
         ssl_socket->configureInitialCongestionWindow(100, std::chrono::microseconds(123));
-        server_connection = dispatcher->createServerConnection(std::move(socket),
-                                                               std::move(ssl_socket), stream_info);
+        server_connection = dispatcher->createServerConnection(
+            std::move(socket), std::move(ssl_socket), stream_info, transport_factory);
         server_connection->addConnectionCallbacks(server_connection_callbacks);
       }));
 
@@ -730,6 +736,7 @@ void testUtilV2(const TestUtilOptionsV2& options) {
   Network::ConnectionPtr server_connection;
   Network::MockConnectionCallbacks server_connection_callbacks;
   NiceMock<StreamInfo::MockStreamInfo> stream_info;
+  NiceMock<Network::MockDownstreamTransportSocketFactory> transport_factory;
   EXPECT_CALL(callbacks, onAccept_(_))
       .WillOnce(Invoke([&](Network::ConnectionSocketPtr& socket) -> void {
         std::string sni = options.transportSocketOptions() != nullptr &&
@@ -741,7 +748,7 @@ void testUtilV2(const TestUtilOptionsV2& options) {
             server_ssl_socket_factory.createDownstreamTransportSocket();
         EXPECT_FALSE(transport_socket->startSecureTransport());
         server_connection = dispatcher->createServerConnection(
-            std::move(socket), std::move(transport_socket), stream_info);
+            std::move(socket), std::move(transport_socket), stream_info, transport_factory);
         server_connection->addConnectionCallbacks(server_connection_callbacks);
       }));
 
@@ -944,6 +951,7 @@ protected:
   Event::DispatcherPtr dispatcher_;
   StreamInfo::StreamInfoImpl stream_info_;
   Network::Address::IpVersion version_;
+  NiceMock<Network::MockDownstreamTransportSocketFactory> transport_factory_;
 };
 
 INSTANTIATE_TEST_SUITE_P(
@@ -1267,7 +1275,7 @@ TEST_P(SslSocketTest, NoCert) {
 // Prefer ECDSA certificate when multiple RSA certificates are present and the
 // client is RSA/ECDSA capable. We validate TLSv1.2 only here, since we validate
 // the e2e behavior on TLSv1.2/1.3 in ssl_integration_test.
-TEST_P(SslSocketTest, MultiCertPreferEcdsa) {
+TEST_P(SslSocketTest, MultiCertPreferEcdsaWithoutSni) {
   const std::string client_ctx_yaml = absl::StrCat(R"EOF(
     common_tls_context:
       tls_params:
@@ -1284,6 +1292,10 @@ TEST_P(SslSocketTest, MultiCertPreferEcdsa) {
   common_tls_context:
     tls_certificates:
     - certificate_chain:
+        filename: "{{ test_rundir }}/test/extensions/transport_sockets/tls/test_data/no_san_cert.pem"
+      private_key:
+        filename: "{{ test_rundir }}/test/extensions/transport_sockets/tls/test_data/no_san_key.pem"
+    - certificate_chain:
         filename: "{{ test_rundir }}/test/extensions/transport_sockets/tls/test_data/selfsigned_cert.pem"
       private_key:
         filename: "{{ test_rundir }}/test/extensions/transport_sockets/tls/test_data/selfsigned_key.pem"
@@ -1295,6 +1307,363 @@ TEST_P(SslSocketTest, MultiCertPreferEcdsa) {
 
   TestUtilOptions test_options(client_ctx_yaml, server_ctx_yaml, true, version_);
   testUtil(test_options);
+}
+
+// When client supports SNI, exact match is preferred over wildcard match.
+TEST_P(SslSocketTest, MultiCertPreferExactSniMatch) {
+  const std::string client_ctx_yaml = absl::StrCat(R"EOF(
+    sni: "server1.example.com"
+    common_tls_context:
+      tls_params:
+        tls_minimum_protocol_version: TLSv1_2
+        tls_maximum_protocol_version: TLSv1_2
+        cipher_suites:
+        - ECDHE-ECDSA-AES128-GCM-SHA256
+        - ECDHE-RSA-AES128-GCM-SHA256
+      validation_context:
+        verify_certificate_hash: )EOF",
+                                                   TEST_SAN_DNS_RSA_1_CERT_256_HASH);
+  const std::string server_ctx_yaml = R"EOF(
+  common_tls_context:
+    tls_certificates:
+    - certificate_chain:
+        filename: "{{ test_rundir }}/test/extensions/transport_sockets/tls/test_data/no_san_cert.pem"
+      private_key:
+        filename: "{{ test_rundir }}/test/extensions/transport_sockets/tls/test_data/no_san_key.pem"
+    - certificate_chain:
+        filename: "{{ test_rundir }}/test/extensions/transport_sockets/tls/test_data/san_dns_rsa_1_cert.pem"
+      private_key:
+        filename: "{{ test_rundir }}/test/extensions/transport_sockets/tls/test_data/san_dns_rsa_1_key.pem"
+    - certificate_chain:
+        filename: "{{ test_rundir }}/test/extensions/transport_sockets/tls/test_data/san_multiple_dns_cert.pem"
+      private_key:
+        filename: "{{ test_rundir }}/test/extensions/transport_sockets/tls/test_data/san_multiple_dns_key.pem"
+)EOF";
+
+  TestUtilOptions test_options(client_ctx_yaml, server_ctx_yaml, true, version_);
+  testUtil(test_options.setExpectedSni("server1.example.com"));
+}
+
+// When client supports SNI and multiple certs have a matching SAN, prefer the earlier
+// cert in the list.
+TEST_P(SslSocketTest, MultiCertPreferFirstCertWithSAN) {
+  {
+    const std::string client_ctx_yaml = absl::StrCat(R"EOF(
+    sni: "server1.example.com"
+    common_tls_context:
+      tls_params:
+        tls_minimum_protocol_version: TLSv1_2
+        tls_maximum_protocol_version: TLSv1_2
+        cipher_suites:
+        - ECDHE-ECDSA-AES128-GCM-SHA256
+        - ECDHE-RSA-AES128-GCM-SHA256
+      validation_context:
+        verify_certificate_hash: )EOF",
+                                                     TEST_SAN_DNS_RSA_1_CERT_256_HASH);
+    const std::string server_ctx_yaml = R"EOF(
+  common_tls_context:
+    tls_certificates:
+    - certificate_chain:
+        filename: "{{ test_rundir }}/test/extensions/transport_sockets/tls/test_data/san_dns_rsa_1_cert.pem"
+      private_key:
+        filename: "{{ test_rundir }}/test/extensions/transport_sockets/tls/test_data/san_dns_rsa_1_key.pem"
+    - certificate_chain:
+        filename: "{{ test_rundir }}/test/extensions/transport_sockets/tls/test_data/san_multiple_dns_1_cert.pem"
+      private_key:
+        filename: "{{ test_rundir }}/test/extensions/transport_sockets/tls/test_data/san_multiple_dns_1_key.pem"
+)EOF";
+
+    TestUtilOptions test_options(client_ctx_yaml, server_ctx_yaml, true, version_);
+    testUtil(test_options.setExpectedSni("server1.example.com"));
+  }
+
+  // Now do the same test but with `tls_certificates` in the opposite order, and the client
+  // validating the other certificate.
+  {
+    const std::string client_ctx_yaml = absl::StrCat(R"EOF(
+    sni: "server1.example.com"
+    common_tls_context:
+      tls_params:
+        tls_minimum_protocol_version: TLSv1_2
+        tls_maximum_protocol_version: TLSv1_2
+        cipher_suites:
+        - ECDHE-ECDSA-AES128-GCM-SHA256
+        - ECDHE-RSA-AES128-GCM-SHA256
+      validation_context:
+        verify_certificate_hash: )EOF",
+                                                     TEST_SAN_MULTIPLE_DNS_1_CERT_256_HASH);
+    const std::string server_ctx_yaml = R"EOF(
+  common_tls_context:
+    tls_certificates:
+    - certificate_chain:
+        filename: "{{ test_rundir }}/test/extensions/transport_sockets/tls/test_data/san_multiple_dns_1_cert.pem"
+      private_key:
+        filename: "{{ test_rundir }}/test/extensions/transport_sockets/tls/test_data/san_multiple_dns_1_key.pem"
+    - certificate_chain:
+        filename: "{{ test_rundir }}/test/extensions/transport_sockets/tls/test_data/san_dns_rsa_1_cert.pem"
+      private_key:
+        filename: "{{ test_rundir }}/test/extensions/transport_sockets/tls/test_data/san_dns_rsa_1_key.pem"
+)EOF";
+
+    TestUtilOptions test_options(client_ctx_yaml, server_ctx_yaml, true, version_);
+    testUtil(test_options.setExpectedSni("server1.example.com"));
+  }
+}
+
+// When client supports SNI and there is no exact match, validate that wildcard "*.example.com"
+// matches to "wildcardonlymatch.example.com".
+TEST_P(SslSocketTest, MultiCertWildcardSniMatch) {
+  const std::string client_ctx_yaml = absl::StrCat(R"EOF(
+    sni: "wildcardonlymatch.example.com"
+    common_tls_context:
+      tls_params:
+        tls_minimum_protocol_version: TLSv1_2
+        tls_maximum_protocol_version: TLSv1_2
+        cipher_suites:
+        - ECDHE-ECDSA-AES128-GCM-SHA256
+        - ECDHE-RSA-AES128-GCM-SHA256
+      validation_context:
+        verify_certificate_hash: )EOF",
+                                                   TEST_SAN_MULTIPLE_DNS_CERT_256_HASH);
+  const std::string server_ctx_yaml = R"EOF(
+  common_tls_context:
+    tls_certificates:
+    - certificate_chain:
+        filename: "{{ test_rundir }}/test/extensions/transport_sockets/tls/test_data/no_san_cert.pem"
+      private_key:
+        filename: "{{ test_rundir }}/test/extensions/transport_sockets/tls/test_data/no_san_key.pem"
+    - certificate_chain:
+        filename: "{{ test_rundir }}/test/extensions/transport_sockets/tls/test_data/san_multiple_dns_cert.pem"
+      private_key:
+        filename: "{{ test_rundir }}/test/extensions/transport_sockets/tls/test_data/san_multiple_dns_key.pem"
+)EOF";
+
+  TestUtilOptions test_options(client_ctx_yaml, server_ctx_yaml, true, version_);
+  testUtil(test_options.setExpectedSni("wildcardonlymatch.example.com"));
+}
+
+// When client supports SNI and there is no exact match, validate that wildcard SAN *.example.com
+// does not matches to a.wildcardonlymatch.example.com, so that the default/first cert is used.
+TEST_P(SslSocketTest, MultiCertWildcardSniMismatch) {
+  const std::string client_ctx_yaml = absl::StrCat(R"EOF(
+    sni: "a.wildcardonlymatch.example.com"
+    common_tls_context:
+      tls_params:
+        tls_minimum_protocol_version: TLSv1_2
+        tls_maximum_protocol_version: TLSv1_2
+        cipher_suites:
+        - ECDHE-ECDSA-AES128-GCM-SHA256
+        - ECDHE-RSA-AES128-GCM-SHA256
+      validation_context:
+        verify_certificate_hash: )EOF",
+                                                   TEST_NO_SAN_CERT_256_HASH);
+  const std::string server_ctx_yaml = R"EOF(
+  common_tls_context:
+    tls_certificates:
+    - certificate_chain:
+        filename: "{{ test_rundir }}/test/extensions/transport_sockets/tls/test_data/no_san_cert.pem"
+      private_key:
+        filename: "{{ test_rundir }}/test/extensions/transport_sockets/tls/test_data/no_san_key.pem"
+    - certificate_chain:
+        filename: "{{ test_rundir }}/test/extensions/transport_sockets/tls/test_data/san_multiple_dns_cert.pem"
+      private_key:
+        filename: "{{ test_rundir }}/test/extensions/transport_sockets/tls/test_data/san_multiple_dns_key.pem"
+)EOF";
+
+  TestUtilOptions test_options(client_ctx_yaml, server_ctx_yaml, true, version_);
+  // The validation succeeds with default cert that does not match to SNI since Envoy does not
+  // define the criteria that how to validate cert SAN based on SNI .
+  testUtil(test_options.setExpectedSni("a.wildcardonlymatch.example.com"));
+}
+
+// On SNI match, the ECDSA certificate is preferred over RSA.
+TEST_P(SslSocketTest, MultiCertPreferEcdsaOnSniMatch) {
+  const std::string client_ctx_yaml = absl::StrCat(R"EOF(
+    sni: "server1.example.com"
+    common_tls_context:
+      tls_params:
+        tls_minimum_protocol_version: TLSv1_2
+        tls_maximum_protocol_version: TLSv1_2
+        cipher_suites:
+        - ECDHE-ECDSA-AES128-GCM-SHA256
+        - ECDHE-RSA-AES128-GCM-SHA256
+      validation_context:
+        verify_certificate_hash: )EOF",
+                                                   TEST_SAN_DNS_ECDSA_1_CERT_256_HASH);
+
+  const std::string server_ctx_yaml = R"EOF(
+  common_tls_context:
+    tls_certificates:
+    - certificate_chain:
+        filename: "{{ test_rundir }}/test/extensions/transport_sockets/tls/test_data/no_san_cert.pem"
+      private_key:
+        filename: "{{ test_rundir }}/test/extensions/transport_sockets/tls/test_data/no_san_key.pem"
+    - certificate_chain:
+        filename: "{{ test_rundir }}/test/extensions/transport_sockets/tls/test_data/san_dns_rsa_1_cert.pem"
+      private_key:
+        filename: "{{ test_rundir }}/test/extensions/transport_sockets/tls/test_data/san_dns_rsa_1_key.pem"
+    - certificate_chain:
+        filename: "{{ test_rundir }}/test/extensions/transport_sockets/tls/test_data/san_dns_rsa_2_cert.pem"
+      private_key:
+        filename: "{{ test_rundir }}/test/extensions/transport_sockets/tls/test_data/san_dns_rsa_2_key.pem"
+    - certificate_chain:
+        filename: "{{ test_rundir }}/test/extensions/transport_sockets/tls/test_data/san_dns_ecdsa_1_cert.pem"
+      private_key:
+        filename: "{{ test_rundir }}/test/extensions/transport_sockets/tls/test_data/san_dns_ecdsa_1_key.pem"
+    - certificate_chain:
+        filename: "{{ test_rundir }}/test/extensions/transport_sockets/tls/test_data/san_dns_ecdsa_2_cert.pem"
+      private_key:
+        filename: "{{ test_rundir }}/test/extensions/transport_sockets/tls/test_data/san_dns_ecdsa_2_key.pem"
+)EOF";
+
+  TestUtilOptions test_options(client_ctx_yaml, server_ctx_yaml, true, version_);
+  testUtil(test_options.setExpectedSni("server1.example.com"));
+}
+
+// On SNI match, the RSA certificate will be selected if ECDSA cert is not present.
+TEST_P(SslSocketTest, MultiCertPickRSAOnSniMatch) {
+  const std::string client_ctx_yaml = absl::StrCat(R"EOF(
+    sni: "server1.example.com"
+    common_tls_context:
+      tls_params:
+        tls_minimum_protocol_version: TLSv1_2
+        tls_maximum_protocol_version: TLSv1_2
+        cipher_suites:
+        - ECDHE-ECDSA-AES128-GCM-SHA256
+        - ECDHE-RSA-AES128-GCM-SHA256
+      validation_context:
+        verify_certificate_hash: )EOF",
+                                                   TEST_SAN_DNS_RSA_1_CERT_256_HASH);
+  const std::string server_ctx_yaml = R"EOF(
+  common_tls_context:
+    tls_certificates:
+    - certificate_chain:
+        filename: "{{ test_rundir }}/test/extensions/transport_sockets/tls/test_data/no_san_cert.pem"
+      private_key:
+        filename: "{{ test_rundir }}/test/extensions/transport_sockets/tls/test_data/no_san_key.pem"
+    - certificate_chain:
+        filename: "{{ test_rundir }}/test/extensions/transport_sockets/tls/test_data/san_dns_rsa_1_cert.pem"
+      private_key:
+        filename: "{{ test_rundir }}/test/extensions/transport_sockets/tls/test_data/san_dns_rsa_1_key.pem"
+    - certificate_chain:
+        filename: "{{ test_rundir }}/test/extensions/transport_sockets/tls/test_data/san_dns_rsa_2_cert.pem"
+      private_key:
+        filename: "{{ test_rundir }}/test/extensions/transport_sockets/tls/test_data/san_dns_rsa_2_key.pem"
+    - certificate_chain:
+        filename: "{{ test_rundir }}/test/extensions/transport_sockets/tls/test_data/san_dns_ecdsa_2_cert.pem"
+      private_key:
+        filename: "{{ test_rundir }}/test/extensions/transport_sockets/tls/test_data/san_dns_ecdsa_2_key.pem"
+)EOF";
+
+  TestUtilOptions test_options(client_ctx_yaml, server_ctx_yaml, true, version_);
+  testUtil(test_options.setExpectedSni("server1.example.com"));
+}
+
+// On SNI mismatch, if full scan is disabled, validate that the first cert is used.
+TEST_P(SslSocketTest, MultiCertWithFullScanDisabledOnSniMismatch) {
+  const std::string client_ctx_yaml = absl::StrCat(R"EOF(
+    sni: "nomatch.example.com"
+    common_tls_context:
+      tls_params:
+        tls_minimum_protocol_version: TLSv1_2
+        tls_maximum_protocol_version: TLSv1_2
+        cipher_suites:
+        - ECDHE-ECDSA-AES128-GCM-SHA256
+        - ECDHE-RSA-AES128-GCM-SHA256
+      validation_context:
+        verify_certificate_hash: )EOF",
+                                                   TEST_NO_SAN_CERT_256_HASH);
+  const std::string server_ctx_yaml = R"EOF(
+  common_tls_context:
+    tls_certificates:
+    - certificate_chain:
+        filename: "{{ test_rundir }}/test/extensions/transport_sockets/tls/test_data/no_san_cert.pem"
+      private_key:
+        filename: "{{ test_rundir }}/test/extensions/transport_sockets/tls/test_data/no_san_key.pem"
+    - certificate_chain:
+        filename: "{{ test_rundir }}/test/extensions/transport_sockets/tls/test_data/san_dns_rsa_1_cert.pem"
+      private_key:
+        filename: "{{ test_rundir }}/test/extensions/transport_sockets/tls/test_data/san_dns_rsa_1_key.pem"
+    - certificate_chain:
+        filename: "{{ test_rundir }}/test/extensions/transport_sockets/tls/test_data/san_dns_ecdsa_1_cert.pem"
+      private_key:
+        filename: "{{ test_rundir }}/test/extensions/transport_sockets/tls/test_data/san_dns_ecdsa_1_key.pem"
+)EOF";
+
+  TestUtilOptions test_options(client_ctx_yaml, server_ctx_yaml, true, version_);
+  // The validation succeeds with the default cert that does not match to SNI, because Envoy does
+  // not define the criteria that how to validate cert SAN based on SNI .
+  testUtil(test_options.setExpectedSni("nomatch.example.com"));
+}
+
+// On SNI mismatch, full scan will be executed if it is enabled, validate that ECDSA cert is
+// preferred over RSA cert.
+TEST_P(SslSocketTest, MultiCertPreferEcdsaWithFullScanEnabledOnSniMismatch) {
+  TestScopedRuntime scoped_runtime;
+  scoped_runtime.mergeValues(
+      {{"envoy.reloadable_features.no_full_scan_certs_on_sni_mismatch", "false"}});
+  const std::string client_ctx_yaml = absl::StrCat(R"EOF(
+    sni: "nomatch.example.com"
+    common_tls_context:
+      tls_params:
+        tls_minimum_protocol_version: TLSv1_2
+        tls_maximum_protocol_version: TLSv1_2
+        cipher_suites:
+        - ECDHE-ECDSA-AES128-GCM-SHA256
+        - ECDHE-RSA-AES128-GCM-SHA256
+      validation_context:
+        verify_certificate_hash: )EOF",
+                                                   TEST_SAN_DNS_ECDSA_1_CERT_256_HASH);
+  const std::string server_ctx_yaml = R"EOF(
+  common_tls_context:
+    tls_certificates:
+    - certificate_chain:
+        filename: "{{ test_rundir }}/test/extensions/transport_sockets/tls/test_data/no_san_cert.pem"
+      private_key:
+        filename: "{{ test_rundir }}/test/extensions/transport_sockets/tls/test_data/no_san_key.pem"
+    - certificate_chain:
+        filename: "{{ test_rundir }}/test/extensions/transport_sockets/tls/test_data/san_dns_rsa_1_cert.pem"
+      private_key:
+        filename: "{{ test_rundir }}/test/extensions/transport_sockets/tls/test_data/san_dns_rsa_1_key.pem"
+    - certificate_chain:
+        filename: "{{ test_rundir }}/test/extensions/transport_sockets/tls/test_data/san_dns_ecdsa_1_cert.pem"
+      private_key:
+        filename: "{{ test_rundir }}/test/extensions/transport_sockets/tls/test_data/san_dns_ecdsa_1_key.pem"
+)EOF";
+
+  TestUtilOptions test_options(client_ctx_yaml, server_ctx_yaml, true, version_);
+  // The validation succeeds with the certificate that does not match to SNI, because Envoy does not
+  // define the criteria that how to validate cert SAN based on SNI .
+  testUtil(test_options.setExpectedSni("nomatch.example.com"));
+}
+
+// EC cert is selected for a no-EC-capable client.
+TEST_P(SslSocketTest, CertWithNotECCapable) {
+  const std::string client_ctx_yaml = absl::StrCat(R"EOF(
+    sni: "server1.example.com"
+    common_tls_context:
+      tls_params:
+        tls_minimum_protocol_version: TLSv1_2
+        tls_maximum_protocol_version: TLSv1_2
+        cipher_suites:
+        - ECDHE-RSA-AES128-GCM-SHA256
+      validation_context:
+        verify_certificate_hash: )EOF",
+                                                   TEST_SAN_DNS_ECDSA_1_CERT_256_HASH);
+  const std::string server_ctx_yaml = R"EOF(
+  common_tls_context:
+    tls_certificates:
+    - certificate_chain:
+        filename: "{{ test_rundir }}/test/extensions/transport_sockets/tls/test_data/san_dns_ecdsa_1_cert.pem"
+      private_key:
+        filename: "{{ test_rundir }}/test/extensions/transport_sockets/tls/test_data/san_dns_ecdsa_1_key.pem"
+)EOF";
+
+  TestUtilOptions test_options(client_ctx_yaml, server_ctx_yaml, false, version_);
+  // TODO(luyao): We might need to modify ssl socket to set proper stats for failed handshake
+  testUtil(test_options.setExpectedServerStats("")
+               .setExpectedSni("server1.example.com")
+               .setExpectedTransportFailureReasonContains("HANDSHAKE_FAILURE_ON_CLIENT_HELLO"));
 }
 
 TEST_P(SslSocketTest, GetUriWithLocalUriSan) {
@@ -2658,7 +3027,7 @@ TEST_P(SslSocketTest, FlushCloseDuringHandshake) {
       .WillOnce(Invoke([&](Network::ConnectionSocketPtr& socket) -> void {
         server_connection = dispatcher_->createServerConnection(
             std::move(socket), server_ssl_socket_factory.createDownstreamTransportSocket(),
-            stream_info_);
+            stream_info_, transport_factory_);
         server_connection->addConnectionCallbacks(server_connection_callbacks);
         Buffer::OwnedImpl data("hello");
         server_connection->write(data, false);
@@ -2728,7 +3097,7 @@ TEST_P(SslSocketTest, HalfClose) {
       .WillOnce(Invoke([&](Network::ConnectionSocketPtr& socket) -> void {
         server_connection = dispatcher_->createServerConnection(
             std::move(socket), server_ssl_socket_factory.createDownstreamTransportSocket(),
-            stream_info_);
+            stream_info_, transport_factory_);
         server_connection->enableHalfClose(true);
         server_connection->addReadFilter(server_read_filter);
         server_connection->addConnectionCallbacks(server_connection_callbacks);
@@ -2810,7 +3179,7 @@ TEST_P(SslSocketTest, ShutdownWithCloseNotify) {
       .WillOnce(Invoke([&](Network::ConnectionSocketPtr& socket) -> void {
         server_connection = dispatcher_->createServerConnection(
             std::move(socket), server_ssl_socket_factory.createDownstreamTransportSocket(),
-            stream_info_);
+            stream_info_, transport_factory_);
         server_connection->enableHalfClose(true);
         server_connection->addReadFilter(server_read_filter);
         server_connection->addConnectionCallbacks(server_connection_callbacks);
@@ -2898,7 +3267,7 @@ TEST_P(SslSocketTest, ShutdownWithoutCloseNotify) {
       .WillOnce(Invoke([&](Network::ConnectionSocketPtr& socket) -> void {
         server_connection = dispatcher_->createServerConnection(
             std::move(socket), server_ssl_socket_factory.createDownstreamTransportSocket(),
-            stream_info_);
+            stream_info_, transport_factory_);
         server_connection->enableHalfClose(true);
         server_connection->addReadFilter(server_read_filter);
         server_connection->addConnectionCallbacks(server_connection_callbacks);
@@ -3014,7 +3383,7 @@ TEST_P(SslSocketTest, ClientAuthMultipleCAs) {
       .WillOnce(Invoke([&](Network::ConnectionSocketPtr& socket) -> void {
         server_connection = dispatcher_->createServerConnection(
             std::move(socket), server_ssl_socket_factory.createDownstreamTransportSocket(),
-            stream_info_);
+            stream_info_, transport_factory_);
         server_connection->addConnectionCallbacks(server_connection_callbacks);
       }));
 
@@ -3099,6 +3468,7 @@ void testTicketSessionResumption(const std::string& server_ctx_yaml1,
   SSL_SESSION* ssl_session = nullptr;
   Network::ConnectionPtr server_connection;
   StreamInfo::StreamInfoImpl stream_info(time_system, nullptr);
+  NiceMock<Network::MockDownstreamTransportSocketFactory> transport_factory;
   EXPECT_CALL(callbacks, onAccept_(_))
       .WillOnce(Invoke([&](Network::ConnectionSocketPtr& socket) -> void {
         Network::DownstreamTransportSocketFactory& tsf =
@@ -3107,7 +3477,8 @@ void testTicketSessionResumption(const std::string& server_ctx_yaml1,
                 ? server_ssl_socket_factory1
                 : server_ssl_socket_factory2;
         server_connection = dispatcher->createServerConnection(
-            std::move(socket), tsf.createDownstreamTransportSocket(), stream_info);
+            std::move(socket), tsf.createDownstreamTransportSocket(), stream_info,
+            transport_factory);
       }));
 
   EXPECT_CALL(client_connection_callbacks, onEvent(Network::ConnectionEvent::Connected))
@@ -3152,7 +3523,8 @@ void testTicketSessionResumption(const std::string& server_ctx_yaml1,
                 ? server_ssl_socket_factory1
                 : server_ssl_socket_factory2;
         server_connection = dispatcher->createServerConnection(
-            std::move(socket), tsf.createDownstreamTransportSocket(), stream_info2);
+            std::move(socket), tsf.createDownstreamTransportSocket(), stream_info2,
+            transport_factory);
         server_connection->addConnectionCallbacks(server_connection_callbacks);
       }));
 
@@ -3238,12 +3610,13 @@ void testSupportForStatelessSessionResumption(const std::string& server_ctx_yaml
   client_connection->connect();
 
   StreamInfo::StreamInfoImpl stream_info(time_system, nullptr);
+  NiceMock<Network::MockDownstreamTransportSocketFactory> transport_factory;
   Network::ConnectionPtr server_connection;
   EXPECT_CALL(callbacks, onAccept_(_))
       .WillOnce(Invoke([&](Network::ConnectionSocketPtr& socket) -> void {
         server_connection = dispatcher->createServerConnection(
             std::move(socket), server_ssl_socket_factory.createDownstreamTransportSocket(),
-            stream_info);
+            stream_info, transport_factory);
 
         const SslHandshakerImpl* ssl_socket =
             dynamic_cast<const SslHandshakerImpl*>(server_connection->ssl().get());
@@ -3844,6 +4217,7 @@ TEST_P(SslSocketTest, ClientAuthCrossListenerSessionResumption) {
   SSL_SESSION* ssl_session = nullptr;
   Network::ConnectionPtr server_connection;
   Network::MockConnectionCallbacks server_connection_callbacks;
+  NiceMock<Network::MockDownstreamTransportSocketFactory> transport_factory;
   EXPECT_CALL(callbacks, onAccept_(_))
       .WillOnce(Invoke([&](Network::ConnectionSocketPtr& accepted_socket) -> void {
         Network::DownstreamTransportSocketFactory& tsf =
@@ -3852,7 +4226,8 @@ TEST_P(SslSocketTest, ClientAuthCrossListenerSessionResumption) {
                 ? server_ssl_socket_factory
                 : server2_ssl_socket_factory;
         server_connection = dispatcher_->createServerConnection(
-            std::move(accepted_socket), tsf.createDownstreamTransportSocket(), stream_info_);
+            std::move(accepted_socket), tsf.createDownstreamTransportSocket(), stream_info_,
+            transport_factory);
         server_connection->addConnectionCallbacks(server_connection_callbacks);
       }));
 
@@ -3894,7 +4269,8 @@ TEST_P(SslSocketTest, ClientAuthCrossListenerSessionResumption) {
                 ? server_ssl_socket_factory
                 : server2_ssl_socket_factory;
         server_connection = dispatcher_->createServerConnection(
-            std::move(accepted_socket), tsf.createDownstreamTransportSocket(), stream_info_);
+            std::move(accepted_socket), tsf.createDownstreamTransportSocket(), stream_info_,
+            transport_factory_);
         server_connection->addConnectionCallbacks(server_connection_callbacks);
       }));
   EXPECT_CALL(server_connection_callbacks, onEvent(Network::ConnectionEvent::RemoteClose));
@@ -3980,7 +4356,7 @@ void SslSocketTest::testClientSessionResumption(const std::string& server_ctx_ya
       .WillOnce(Invoke([&](Network::ConnectionSocketPtr& socket) -> void {
         server_connection = dispatcher->createServerConnection(
             std::move(socket), server_ssl_socket_factory.createDownstreamTransportSocket(),
-            stream_info_);
+            stream_info_, transport_factory_);
         server_connection->addConnectionCallbacks(server_connection_callbacks);
       }));
 
@@ -4026,7 +4402,7 @@ void SslSocketTest::testClientSessionResumption(const std::string& server_ctx_ya
       .WillOnce(Invoke([&](Network::ConnectionSocketPtr& socket) -> void {
         server_connection = dispatcher->createServerConnection(
             std::move(socket), server_ssl_socket_factory.createDownstreamTransportSocket(),
-            stream_info_);
+            stream_info_, transport_factory_);
         server_connection->addConnectionCallbacks(server_connection_callbacks);
       }));
 
@@ -4210,7 +4586,7 @@ TEST_P(SslSocketTest, SslError) {
       .WillOnce(Invoke([&](Network::ConnectionSocketPtr& socket) -> void {
         server_connection = dispatcher_->createServerConnection(
             std::move(socket), server_ssl_socket_factory.createDownstreamTransportSocket(),
-            stream_info_);
+            stream_info_, transport_factory_);
         server_connection->addConnectionCallbacks(server_connection_callbacks);
       }));
 
@@ -5315,7 +5691,7 @@ protected:
         .WillOnce(Invoke([&](Network::ConnectionSocketPtr& socket) -> void {
           server_connection_ = dispatcher_->createServerConnection(
               std::move(socket), server_ssl_socket_factory_->createDownstreamTransportSocket(),
-              stream_info_);
+              stream_info_, transport_factory_);
           server_connection_->setBufferLimits(read_buffer_limit);
           server_connection_->addConnectionCallbacks(server_callbacks_);
           server_connection_->addReadFilter(read_filter_);
@@ -5391,7 +5767,7 @@ protected:
         .WillOnce(Invoke([&](Network::ConnectionSocketPtr& socket) -> void {
           server_connection_ = dispatcher_->createServerConnection(
               std::move(socket), server_ssl_socket_factory_->createDownstreamTransportSocket(),
-              stream_info_);
+              stream_info_, transport_factory_);
           server_connection_->setBufferLimits(read_buffer_limit);
           server_connection_->addConnectionCallbacks(server_callbacks_);
           server_connection_->addReadFilter(read_filter_);
@@ -5512,7 +5888,7 @@ TEST_P(SslReadBufferLimitTest, TestBind) {
       .WillOnce(Invoke([&](Network::ConnectionSocketPtr& socket) -> void {
         server_connection_ = dispatcher_->createServerConnection(
             std::move(socket), server_ssl_socket_factory_->createDownstreamTransportSocket(),
-            stream_info_);
+            stream_info_, transport_factory_);
         server_connection_->addConnectionCallbacks(server_callbacks_);
         server_connection_->addReadFilter(read_filter_);
         EXPECT_EQ("", server_connection_->nextProtocol());
@@ -5543,7 +5919,7 @@ TEST_P(SslReadBufferLimitTest, SmallReadsIntoSameSlice) {
       .WillOnce(Invoke([&](Network::ConnectionSocketPtr& socket) -> void {
         server_connection_ = dispatcher_->createServerConnection(
             std::move(socket), server_ssl_socket_factory_->createDownstreamTransportSocket(),
-            stream_info_);
+            stream_info_, transport_factory_);
         server_connection_->setBufferLimits(read_buffer_limit);
         server_connection_->addConnectionCallbacks(server_callbacks_);
         server_connection_->addReadFilter(read_filter_);

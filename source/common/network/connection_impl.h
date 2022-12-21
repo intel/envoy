@@ -239,12 +239,15 @@ class ServerConnectionImpl : public ConnectionImpl, virtual public ServerConnect
 public:
   ServerConnectionImpl(Event::Dispatcher& dispatcher, ConnectionSocketPtr&& socket,
                        TransportSocketPtr&& transport_socket, StreamInfo::StreamInfo& stream_info,
+                       const DownstreamTransportSocketFactory& transport_socket_factory,
                        bool connected);
 
   // ServerConnection impl
   void setTransportSocketConnectTimeout(std::chrono::milliseconds timeout,
                                         Stats::Counter& timeout_stat) override;
   void raiseEvent(ConnectionEvent event) override;
+
+  void refreshTransportSocket();
 
 private:
   void onTransportSocketConnectTimeout();
@@ -254,6 +257,7 @@ private:
   // call to setTransportSocketConnectTimeout and is reset when the connection is established.
   Event::TimerPtr transport_socket_connect_timer_;
   Stats::Counter* transport_socket_timeout_stat_;
+  const Network::DownstreamTransportSocketFactory& transport_socket_factory_;
 };
 
 /**
