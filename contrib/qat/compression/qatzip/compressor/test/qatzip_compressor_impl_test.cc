@@ -39,7 +39,7 @@ protected:
 
     Stats::IsolatedStoreImpl stats_store{};
     Compression::Gzip::Decompressor::ZlibDecompressorImpl decompressor(stats_store, "test.",
-                                                                       chunk_size);
+                                                                       chunk_size, 100);
     // Window bits = 31 (15 for maximum window bits + 16 for gzip).
     decompressor.init(31);
 
