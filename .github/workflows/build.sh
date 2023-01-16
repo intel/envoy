@@ -8,6 +8,8 @@
 #first build should give permission to docker volumes
 #sudo chmod -R 777 /var/lib/docker/volumes 
 
+set -e
+
 UPDATE_BRANCH=${UPDATE_BRANCH:-"release-1.16-intel"}
 # To maintain build repo is latest
 cd ..
