@@ -21,6 +21,7 @@ configure_make(
     copts = [
         "-Wno-error=newline-eof",
         "-Wno-error=strict-prototypes",
+        "-Wno-error=unknown-warning-option",
         "-Wno-error=unused-but-set-variable",
     ],
     lib_source = "@com_github_intel_qatzip//:all",
