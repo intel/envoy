@@ -18,6 +18,11 @@ configure_make(
         "--enable-static",
         "--disable-shared",
     ],
+    copts = [
+        "-Wno-error=newline-eof",
+        "-Wno-error=strict-prototypes",
+        "-Wno-error=unused-but-set-variable",
+    ],
     lib_source = "@com_github_intel_qatzip//:all",
     out_static_libs = [
         "libqatzip.a",
