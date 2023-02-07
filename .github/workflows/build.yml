@@ -10,21 +10,23 @@ env:
   HUB: ghcr.io/${{ github.repository }}
 
 jobs:
-  build:
-    runs-on: self-hosted
+  build_proxyv2:
+    runs-on: ubuntu-20.04
+
     environment:
       name: dev
 
     env:
-      TAG: ${{ github.base_ref || github.ref_name }} 
+      TAG: ${{ github.base_ref || github.ref_name }}
+
     steps:
     - uses: actions/checkout@v3
 
     - name: Build image Proxyv2
       run: |
-        ./.github/workflows/build.sh
+        ./.github/workflows/build_proxyv2.sh
       env:
-        UPDATE_BRANCH: ${{ github.base_ref || github.ref_name }} 
+        UPDATE_BRANCH: ${{ github.base_ref || github.ref_name }}
 
     - name: Login to the container registry
       uses: docker/login-action@v2
@@ -37,3 +39,24 @@ jobs:
       if: ${{ github.event_name != 'pull_request' }}
       run: |
         docker push ${HUB}/proxyv2:${TAG}
+
+  build_envoy-contrib-dev:
+    runs-on: ubuntu-20.04
+
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Build envoy-contrib-dev
+      run: |
+        ./ci/run_envoy_docker.sh './ci/do_ci.sh bazel.dev.contrib'
+
+    - name: Dockerize
+      run: |
+        sed -i 's/ENVOY_BINARY=envoy/ENVOY_BINARY=envoy-contrib/' ./ci/Dockerfile-envoy
+        sed -i 's/ENVOY_BINARY_SUFFIX=_stripped/ENVOY_BINARY_SUFFIX/' ci/Dockerfile-envoy
+        docker build -f ./ci/Dockerfile-envoy -t envoy-contrib-dev:${TAG} .
+
+    - name: Push image envoy-contrib-dev
+      if: ${{ github.event_name != 'pull_request' }}
+      run: |
+        docker push ${HUB}/envoy-contrib-dev:${TAG}
