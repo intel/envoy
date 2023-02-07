@@ -46,6 +46,15 @@ jobs:
     steps:
     - uses: actions/checkout@v3
 
+    - name: Enable IPv6
+      run: |
+        sudo mkdir -p /etc/docker
+        echo '{
+          "ipv6": true,
+          "fixed-cidr-v6": "2001:db8:1::/64"
+        }' | sudo tee /etc/docker/daemon.json
+        sudo service docker restart
+
     - name: Build envoy-contrib-dev
       run: |
         ./ci/run_envoy_docker.sh './ci/do_ci.sh bazel.dev.contrib'
