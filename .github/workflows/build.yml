@@ -65,6 +65,13 @@ jobs:
         sed -i 's/ENVOY_BINARY_SUFFIX=_stripped/ENVOY_BINARY_SUFFIX/' ci/Dockerfile-envoy
         docker build -f ./ci/Dockerfile-envoy -t envoy-contrib:${TAG} .
 
+    - name: Login to the container registry
+      uses: docker/login-action@v2
+      with:
+        registry: ${{ env.HUB }}
+        username: ${{ github.repository_owner }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+
     - name: Push image envoy-contrib
       if: ${{ github.event_name != 'pull_request' }}
       run: |
