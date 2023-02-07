@@ -40,7 +40,7 @@ jobs:
       run: |
         docker push ${HUB}/proxyv2:${TAG}
 
-  build_envoy-contrib-dev:
+  build_envoy-contrib:
     runs-on: ubuntu-20.04
 
     steps:
@@ -55,17 +55,17 @@ jobs:
         }' | sudo tee /etc/docker/daemon.json
         sudo service docker restart
 
-    - name: Build envoy-contrib-dev
+    - name: Build envoy-contrib
       run: |
-        ./ci/run_envoy_docker.sh './ci/do_ci.sh bazel.dev.contrib'
+        ./ci/run_envoy_docker.sh './ci/do_ci.sh bazel.release'
 
     - name: Dockerize
       run: |
         sed -i 's/ENVOY_BINARY=envoy/ENVOY_BINARY=envoy-contrib/' ./ci/Dockerfile-envoy
         sed -i 's/ENVOY_BINARY_SUFFIX=_stripped/ENVOY_BINARY_SUFFIX/' ci/Dockerfile-envoy
-        docker build -f ./ci/Dockerfile-envoy -t envoy-contrib-dev:${TAG} .
+        docker build -f ./ci/Dockerfile-envoy -t envoy-contrib:${TAG} .
 
-    - name: Push image envoy-contrib-dev
+    - name: Push image envoy-contrib
       if: ${{ github.event_name != 'pull_request' }}
       run: |
-        docker push ${HUB}/envoy-contrib-dev:${TAG}
+        docker push ${HUB}/envoy-contrib:${TAG}
