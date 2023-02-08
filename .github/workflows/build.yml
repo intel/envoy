@@ -48,7 +48,7 @@ jobs:
 
     - uses: actions/cache@v3
       with:
-        key: \"bazel.release\" | ${{ hashFiles('./WORKSPACE') }} | ${{ hashFiles('**/*.bzl') }}
+        key: bazel.release|${{ hashFiles('./WORKSPACE') }}|${{ hashFiles('**/*.bzl') }}
         path: |
           /tmp/envoy-docker-build/repository_cache
 
