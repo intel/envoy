@@ -191,7 +191,6 @@ def envoy_dependencies(skip_targets = []):
     _com_github_tencent_rapidjson()
     _com_github_nlohmann_json()
     _com_github_ncopa_suexec()
-    _com_github_yasm_yasm()
     _com_google_absl()
     _com_google_googletest()
     _com_google_protobuf()

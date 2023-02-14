@@ -18,12 +18,12 @@ configure_make(
         "--enable-static",
         "--disable-shared",
     ],
-    copts = [
-        "-Wno-error=newline-eof",
-        "-Wno-error=strict-prototypes",
-        "-Wno-error=unknown-warning-option",
-        "-Wno-error=unused-but-set-variable",
-    ],
+    env = select({
+        "//bazel:clang_build": {
+            "CFLAGS": "-Wno-error=newline-eof",
+        },
+        "//conditions:default": {},
+    }),
     lib_source = "@com_github_intel_qatzip//:all",
     out_static_libs = [
         "libqatzip.a",
