@@ -41,7 +41,7 @@ jobs:
         docker push ${HUB}/proxyv2:${TAG}
 
   build_envoy-contrib:
-    runs-on: ubuntu-20.04
+    runs-on: envoy-build
 
     steps:
     - uses: actions/checkout@v3
