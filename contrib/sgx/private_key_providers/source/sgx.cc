@@ -34,6 +34,8 @@ SGXContext::~SGXContext() {
 CK_RV SGXContext::sgxInit() {
   Thread::LockGuard init_lock(init_lock_);
   CK_RV status = CKR_OK;
+  CK_C_INITIALIZE_ARGS init_args = {NULL_PTR, NULL_PTR, NULL_PTR, NULL_PTR, CKF_OS_LOCKING_OK, NULL_PTR};
+
   if (initialized_ == true) {
     ENVOY_LOG(debug, "sgx: The enclave has been initialized, skip initialization.");
     return status;
@@ -54,7 +56,7 @@ CK_RV SGXContext::sgxInit() {
     return status;
   }
 
-  status = p11_->C_Initialize(NULL_PTR);
+  status = p11_->C_Initialize(static_cast<CK_VOID_PTR> (&init_args));
 
   // The CTK could have been initialized by other sgx providers
   if (status != CKR_OK && status != CKR_CRYPTOKI_ALREADY_INITIALIZED) {
@@ -83,6 +85,9 @@ CK_RV SGXContext::sgxInit() {
     return status;
   }
 
+  running_enclave_threads_ = 0;
+  // Compiled CTK with TCSNum 100, so there can be 100 threads can be run in concurrency.
+  maximum_enclave_threads_ = 100;
   initialized_ = true;
 
   return CKR_OK;
@@ -192,39 +197,50 @@ CK_RV SGXContext::rsaDecrypt(CK_OBJECT_HANDLE privkey, const uint8_t* in, size_t
 
   CK_RV status = CKR_OK;
   CK_MECHANISM mechanism = {CKM_RSA_X_509, NULL_PTR, 0};
+  CK_SESSION_HANDLE sessionhandle;
 
-  if ((p11_ == NULL_PTR) || (sessionhandle_ == CK_INVALID_HANDLE)) {
+  if (p11_ == NULL_PTR) {
     ENVOY_LOG(debug, "rsaDecrypt parameters error.");
     return CKR_ARGUMENTS_BAD;
   }
 
-  status = p11_->C_DecryptInit(sessionhandle_, &mechanism, privkey);
+  status = openSession(sessionhandle);
+  if (status != CKR_OK) {
+    ENVOY_LOG(debug, "Error during openSession: {}\n", status);
+    return status;
+  }
+
+  status = p11_->C_DecryptInit(sessionhandle, &mechanism, privkey);
 
   if (status != CKR_OK) {
     ENVOY_LOG(debug, "Error during p11->C_DecryptInit: {}\n", status);
+    closeSession(sessionhandle);
     return status;
   }
 
   decrypted->byte_size = 0;
 
-  status = p11_->C_Decrypt(sessionhandle_, const_cast<CK_BYTE_PTR>(in), inlen, NULL_PTR,
+  status = p11_->C_Decrypt(sessionhandle, const_cast<CK_BYTE_PTR>(in), inlen, NULL_PTR,
                            &decrypted->byte_size);
 
   if (status != CKR_OK) {
     ENVOY_LOG(debug, "Error during p11->C_Decrypt: {}\n", status);
+    closeSession(sessionhandle);
     return status;
   }
 
   decrypted->bytes = static_cast<CK_BYTE_PTR>(calloc(decrypted->byte_size, sizeof(CK_BYTE)));
 
-  status = p11_->C_Decrypt(sessionhandle_, const_cast<CK_BYTE_PTR>(in), inlen, decrypted->bytes,
+  status = p11_->C_Decrypt(sessionhandle, const_cast<CK_BYTE_PTR>(in), inlen, decrypted->bytes,
                            &decrypted->byte_size);
 
   if (status != CKR_OK) {
     ENVOY_LOG(debug, "Error during p11->C_Decrypt: {}\n", status);
     free(decrypted->bytes);
+    closeSession(sessionhandle);
+    return status;
   }
-
+  closeSession(sessionhandle);
   return status;
 }
 
@@ -330,10 +346,13 @@ CK_RV SGXContext::rsaSign(CK_OBJECT_HANDLE privkey, CK_OBJECT_HANDLE pubkey, boo
   CK_ULONG paramLen = 0;
   CK_RV status = CKR_OK;
   CK_MECHANISM mechanism;
+  CK_SESSION_HANDLE sessionhandle;
+  ENVOY_LOG_TO_LOGGER(Logger::Registry::getLog(Logger::Id::secret), debug, "privkey {}", privkey);
+  ENVOY_LOG_TO_LOGGER(Logger::Registry::getLog(Logger::Id::secret), debug, "pubkey {}", pubkey);
   ENVOY_LOG_TO_LOGGER(Logger::Registry::getLog(Logger::Id::secret), debug, "hash {}", hash);
   ENVOY_LOG_TO_LOGGER(Logger::Registry::getLog(Logger::Id::secret), debug, "is_pss {}", ispss);
 
-  if ((p11_ == NULL_PTR) || (sessionhandle_ == CK_INVALID_HANDLE)) {
+  if (p11_ == NULL_PTR) {
     ENVOY_LOG(debug, "rsaSign parameters error.");
     return CKR_ARGUMENTS_BAD;
   }
@@ -404,61 +423,56 @@ CK_RV SGXContext::rsaSign(CK_OBJECT_HANDLE privkey, CK_OBJECT_HANDLE pubkey, boo
   mechanism.pParameter = param;
   mechanism.ulParameterLen = paramLen;
 
-  status = p11_->C_SignInit(sessionhandle_, &mechanism, privkey);
-
+  status = openSession(sessionhandle);
   if (status != CKR_OK) {
-    ENVOY_LOG(debug, "Error during p11->C_SignInit: {}\n", status);
+    ENVOY_LOG(debug, "Error during openSession: {}\n", status);
     return status;
   }
 
-  status = p11_->C_Sign(sessionhandle_, const_cast<CK_BYTE_PTR>(in), inlen, NULL_PTR,
+  status = p11_->C_SignInit(sessionhandle, &mechanism, privkey);
+
+  if (status != CKR_OK) {
+    ENVOY_LOG(debug, "Error during p11->C_SignInit: {}\n", status);
+    closeSession(sessionhandle);
+    return status;
+  }
+
+  status = p11_->C_Sign(sessionhandle, const_cast<CK_BYTE_PTR>(in), inlen, NULL_PTR,
                         &signature->byte_size);
   if (status != CKR_OK) {
     ENVOY_LOG(debug, "Error during p11->C_Sign: {}\n", status);
     signature->byte_size = 0;
+    closeSession(sessionhandle);
     return status;
   }
 
   signature->bytes = static_cast<CK_BYTE_PTR>(calloc(signature->byte_size, sizeof(CK_BYTE)));
 
-  status = p11_->C_Sign(sessionhandle_, const_cast<CK_BYTE_PTR>(in), inlen, signature->bytes,
+  status = p11_->C_Sign(sessionhandle, const_cast<CK_BYTE_PTR>(in), inlen, signature->bytes,
                         &signature->byte_size);
   if (status != CKR_OK) {
     ENVOY_LOG(debug, "Error during p11->C_Sign: {}\n", status);
     free(signature->bytes);
     signature->byte_size = 0;
+    closeSession(sessionhandle);
     return status;
   }
-
-  status = p11_->C_VerifyInit(sessionhandle_, &mechanism, pubkey);
-  if (status != CKR_OK) {
-    ENVOY_LOG(debug, "Error during p11->C_VerifyInit: {}\n", status);
-    free(signature->bytes);
-    signature->byte_size = 0;
-    return status;
-  }
-
-  status = p11_->C_Verify(sessionhandle_, const_cast<CK_BYTE_PTR>(in), inlen, signature->bytes,
-                          signature->byte_size);
-  if (status != CKR_OK) {
-    ENVOY_LOG(debug, "Error during p11->C_Verify: {}\n", status);
-    free(signature->bytes);
-    signature->byte_size = 0;
-    return status;
-  }
-
+  closeSession(sessionhandle);
   return status;
 }
 
-CK_RV SGXContext::ecdsaSign(CK_OBJECT_HANDLE private_key, CK_OBJECT_HANDLE pubkey,
+CK_RV SGXContext::ecdsaSign(CK_OBJECT_HANDLE privkey, CK_OBJECT_HANDLE pubkey,
                             const uint8_t* in, size_t inlen, ByteString* signature) {
   CK_MECHANISM_TYPE mechanismType = CKM_ECDSA;
   CK_VOID_PTR param = NULL_PTR;
   CK_ULONG paramLen = 0;
   CK_RV status = CKR_OK;
   CK_MECHANISM mechanism;
+  CK_SESSION_HANDLE sessionhandle;
+  ENVOY_LOG_TO_LOGGER(Logger::Registry::getLog(Logger::Id::secret), debug, "privkey {}", privkey);
+  ENVOY_LOG_TO_LOGGER(Logger::Registry::getLog(Logger::Id::secret), debug, "pubkey {}", pubkey);
 
-  if ((p11_ == NULL_PTR) || (sessionhandle_ == CK_INVALID_HANDLE)) {
+  if (p11_ == NULL_PTR) {
     ENVOY_LOG(debug, "ecdsaSign parameters error.");
     return CKR_ARGUMENTS_BAD;
   }
@@ -467,49 +481,82 @@ CK_RV SGXContext::ecdsaSign(CK_OBJECT_HANDLE private_key, CK_OBJECT_HANDLE pubke
   mechanism.pParameter = param;
   mechanism.ulParameterLen = paramLen;
 
-  status = p11_->C_SignInit(sessionhandle_, &mechanism, private_key);
-
+  status = openSession(sessionhandle);
   if (status != CKR_OK) {
-    ENVOY_LOG(debug, "Error during p11->C_SignInit: {}\n", status);
+    ENVOY_LOG(debug, "Error during openSession: {}\n", status);
     return status;
   }
 
-  status = p11_->C_Sign(sessionhandle_, const_cast<CK_BYTE_PTR>(in), inlen, NULL_PTR,
+  status = p11_->C_SignInit(sessionhandle, &mechanism, privkey);
+
+  if (status != CKR_OK) {
+    ENVOY_LOG(debug, "Error during p11->C_SignInit: {}\n", status);
+    closeSession(sessionhandle);
+    return status;
+  }
+
+  status = p11_->C_Sign(sessionhandle, const_cast<CK_BYTE_PTR>(in), inlen, NULL_PTR,
                         &signature->byte_size);
   if (status != CKR_OK) {
     ENVOY_LOG(debug, "Error during p11->C_Sign: {}\n", status);
     signature->byte_size = 0;
+    closeSession(sessionhandle);
     return status;
   }
 
   signature->bytes = static_cast<CK_BYTE_PTR>(calloc(signature->byte_size, sizeof(CK_BYTE)));
 
-  status = p11_->C_Sign(sessionhandle_, const_cast<CK_BYTE_PTR>(in), inlen, signature->bytes,
+  status = p11_->C_Sign(sessionhandle, const_cast<CK_BYTE_PTR>(in), inlen, signature->bytes,
                         &signature->byte_size);
   if (status != CKR_OK) {
     ENVOY_LOG(debug, "Error during p11->C_Sign: {}\n", status);
     free(signature->bytes);
     signature->byte_size = 0;
+    closeSession(sessionhandle);
     return status;
   }
+  closeSession(sessionhandle);
+  return status;
+}
 
-  status = p11_->C_VerifyInit(sessionhandle_, &mechanism, pubkey);
+CK_RV SGXContext::openSession(CK_SESSION_HANDLE& ro_session_handle) {
+  CK_RV status = CKR_OK;
+
+  {
+    Thread::LockGuard lock(thread_num_control_lock_);
+    while (running_enclave_threads_ >= maximum_enclave_threads_) {
+      thread_num_changed_.wait(thread_num_control_lock_);
+    }
+    running_enclave_threads_++;
+  }
+
+  status = p11_->C_OpenSession(slotid_, CKF_SERIAL_SESSION, NULL_PTR, NULL_PTR, &ro_session_handle);
   if (status != CKR_OK) {
-    ENVOY_LOG(debug, "Error during p11->C_VerifyInit: {}\n", status);
-    free(signature->bytes);
-    signature->byte_size = 0;
+    ENVOY_LOG(debug, "Error during p11_->C_OpenSession(): {}\n", status);
+    {
+      Thread::LockGuard lock(thread_num_control_lock_);
+      running_enclave_threads_--;
+      thread_num_changed_.notifyOne();
+    }
     return status;
   }
+  ENVOY_LOG(debug, "p11_->C_OpenSession() create RO session:%d\n", ro_session_handle);
+  return status;
+}
 
-  status = p11_->C_Verify(sessionhandle_, const_cast<CK_BYTE_PTR>(in), inlen, signature->bytes,
-                          signature->byte_size);
+CK_RV SGXContext::closeSession(CK_SESSION_HANDLE ro_session_handle) {
+  CK_RV status = CKR_OK;
+
+  status = p11_->C_CloseSession(ro_session_handle);
   if (status != CKR_OK) {
-    ENVOY_LOG(debug, "Error during p11->C_Verify: {}\n", status);
-    free(signature->bytes);
-    signature->byte_size = 0;
-    return status;
+    ENVOY_LOG(debug, "Error during p11_->C_CloseSession(): {}\n", status);
   }
-
+  ENVOY_LOG(debug, "p11_->C_CloseSession() close RO session:%d\n", ro_session_handle);
+  {
+    Thread::LockGuard lock(thread_num_control_lock_);
+    running_enclave_threads_--;
+    thread_num_changed_.notifyOne();
+  }
   return status;
 }
 

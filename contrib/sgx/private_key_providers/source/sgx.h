@@ -110,6 +110,10 @@ private:
 
   CK_RV findToken();
 
+  CK_RV openSession(CK_SESSION_HANDLE &ro_session_handle);
+
+  CK_RV closeSession(CK_SESSION_HANDLE ro_session_handle);
+
   bool initialized_ = false;
   Thread::MutexBasicLockable init_lock_{};
 
@@ -120,6 +124,11 @@ private:
   CK_SLOT_ID slotid_;
   CK_SESSION_HANDLE sessionhandle_;
   CK_FUNCTION_LIST_PTR p11_;
+
+  Thread::MutexBasicLockable thread_num_control_lock_{};
+  Thread::CondVar thread_num_changed_;
+  CK_ULONG running_enclave_threads_;
+  CK_ULONG maximum_enclave_threads_;
 };
 
 } // namespace Sgx
