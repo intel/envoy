@@ -46,12 +46,6 @@ jobs:
     steps:
     - uses: actions/checkout@v3
 
-    - uses: actions/cache@v3
-      with:
-        key: bazel.release|${{ hashFiles('./WORKSPACE') }}|${{ hashFiles('**/*.bzl') }}
-        path: |
-          /tmp/envoy-docker-build/repository_cache
-
     - name: Enable IPv6
       run: |
         sudo mkdir -p /etc/docker
