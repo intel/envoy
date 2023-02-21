@@ -81,4 +81,4 @@ jobs:
       if: always()
       run: |
         rm -rf /tmp/envoy-docker-build /tmp/envoy_test*
-        docker system prune -f && docker volume rm $(docker volume ls -q --filter dangling=true)
+        docker system prune -f
