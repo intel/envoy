@@ -76,3 +76,9 @@ jobs:
       if: ${{ github.event_name != 'pull_request' }}
       run: |
         docker push ${HUB}/envoy-contrib:${TAG}
+
+    - name: Clean up
+      if: always()
+      run: |
+        rm -rf /tmp/envoy-docker-build /tmp/envoy_test*
+        docker system prune -f && docker volume rm $(docker volume ls -q --filter dangling=true)
