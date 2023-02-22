@@ -45,6 +45,7 @@ cbor
 CDN
 CDS
 CEL
+ctk
 CWND
 DLE
 DPE
@@ -1403,6 +1404,7 @@ OBQ
 SemVer
 SCM
 SCTP
+SGX
 CRLF
 clen
 crlf
