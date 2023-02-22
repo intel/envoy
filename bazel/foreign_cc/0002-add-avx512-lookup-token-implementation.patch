@@ -1,0 +1,168 @@
+From 3268f4ba2acb5beb8b26748bd1f355f996a345d5 Mon Sep 17 00:00:00 2001
+From: Vladimir Medvedkin <vladimir.medvedkin@intel.com>
+Date: Thu, 19 May 2022 14:08:14 +0000
+Subject: [PATCH 2/2] add avx512 lookup token implementation
+
+Signed-off-by: Vladimir Medvedkin <vladimir.medvedkin@intel.com>
+---
+ lib/nghttp2_hd.c                   |   6 ++
+ lib/nghttp2_hd_lookup_tok_avx512.h | 116 +++++++++++++++++++++++++++++
+ 2 files changed, 122 insertions(+)
+ create mode 100644 lib/nghttp2_hd_lookup_tok_avx512.h
+
+diff --git a/lib/nghttp2_hd.c b/lib/nghttp2_hd.c
+index 5ed83907..04477dec 100644
+--- a/lib/nghttp2_hd.c
++++ b/lib/nghttp2_hd.c
+@@ -32,6 +32,8 @@
+ #include "nghttp2_int.h"
+ #include "nghttp2_debug.h"
+
++#include "nghttp2_hd_lookup_tok_avx512.h"
++
+ /* Make scalar initialization form of nghttp2_hd_entry */
+ #define MAKE_STATIC_ENT(N, V, T, H)                                            \
+   {                                                                            \
+@@ -118,6 +120,9 @@ static int memeq(const void *s1, const void *s2, size_t n) {
+  * h2o header lookup.  https://github.com/h2o/h2o
+  */
+ static int32_t lookup_token(const uint8_t *name, size_t namelen) {
++#ifdef __AVX512F__
++	return nghttp2_lookup_tok_avx512(name, namelen);
++#else
+   switch (namelen) {
+   case 2:
+     switch (name[1]) {
+@@ -477,6 +482,7 @@ static int32_t lookup_token(const uint8_t *name, size_t namelen) {
+     break;
+   }
+   return -1;
++#endif
+ }
+
+ void nghttp2_hd_entry_init(nghttp2_hd_entry *ent, nghttp2_hd_nv *nv) {
+diff --git a/lib/nghttp2_hd_lookup_tok_avx512.h b/lib/nghttp2_hd_lookup_tok_avx512.h
+new file mode 100644
+index 00000000..7621202c
+--- /dev/null
++++ b/lib/nghttp2_hd_lookup_tok_avx512.h
+@@ -0,0 +1,116 @@
++#ifdef __AVX512F__
++
++#include <immintrin.h>
++
++#define LEN_MSK                 0xa0ffffc
++
++#define unlikely(x) __builtin_expect(x, 0)
++
++struct nghttp2_tok_table {
++	uint8_t	ymm[28];
++	uint32_t ret;
++} __attribute__((aligned (32)));
++
++static struct nghttp2_tok_table nghttp2_tok_arr[1 << 10] = {
++	[2]= { {'t','e'}, NGHTTP2_TOKEN_TE},
++	[19]= { {'v','i','a'}, NGHTTP2_TOKEN_VIA},
++	[35]= { {'a','g','e'}, NGHTTP2_TOKEN_AGE},
++	[164]= { {'d','a','t','e'}, NGHTTP2_TOKEN_DATE},
++	[132]= { {'e','t','a','g'}, NGHTTP2_TOKEN_ETAG},
++	[100]= { {'l','i','n','k'}, NGHTTP2_TOKEN_LINK},
++	[244]= { {'f','r','o','m'}, NGHTTP2_TOKEN_FROM},
++	[196]= { {'h','o','s','t'}, NGHTTP2_TOKEN_HOST},
++	[84]= { {'v','a','r','y'}, NGHTTP2_TOKEN_VARY},
++	[245]= { {'r','a','n','g','e'}, NGHTTP2_TOKEN_RANGE},
++	[149]= { {':','p','a','t','h'}, NGHTTP2_TOKEN__PATH},
++	[165]= { {'a','l','l','o','w'}, NGHTTP2_TOKEN_ALLOW},
++	[118]= { {'c','o','o','k','i','e'}, NGHTTP2_TOKEN_COOKIE},
++	[214]= { {'s','e','r','v','e','r'}, NGHTTP2_TOKEN_SERVER},
++	[198]= { {'a','c','c','e','p','t'}, NGHTTP2_TOKEN_ACCEPT},
++	[134]= { {'e','x','p','e','c','t'}, NGHTTP2_TOKEN_EXPECT},
++	[183]= { {':','m','e','t','h','o','d'}, NGHTTP2_TOKEN__METHOD},
++	[87]= { {':','s','c','h','e','m','e'}, NGHTTP2_TOKEN__SCHEME},
++	[103]= { {'u','p','g','r','a','d','e'}, NGHTTP2_TOKEN_UPGRADE},
++	[119]= { {'r','e','f','r','e','s','h'}, NGHTTP2_TOKEN_REFRESH},
++	[247]= { {'r','e','f','e','r','e','r'}, NGHTTP2_TOKEN_REFERER},
++	[55]= { {':','s','t','a','t','u','s'}, NGHTTP2_TOKEN__STATUS},
++	[7]= { {'e','x','p','i','r','e','s'}, NGHTTP2_TOKEN_EXPIRES},
++	[40]= { {'i','f','-','r','a','n','g','e'}, NGHTTP2_TOKEN_IF_RANGE},
++	[168]= { {'i','f','-','m','a','t','c','h'}, NGHTTP2_TOKEN_IF_MATCH},
++	[72]= { {'l','o','c','a','t','i','o','n'}, NGHTTP2_TOKEN_LOCATION},
++	[473]= { {':','p','r','o','t','o','c','o','l'}, NGHTTP2_TOKEN__PROTOCOL},
++	[58]= { {'k','e','e','p','-','a','l','i','v','e'}, NGHTTP2_TOKEN_KEEP_ALIVE},
++	[442]= { {'s','e','t','-','c','o','o','k','i','e'}, NGHTTP2_TOKEN_SET_COOKIE},
++	[506]= { {'c','o','n','n','e','c','t','i','o','n'}, NGHTTP2_TOKEN_CONNECTION},
++	[298]= { {'u','s','e','r','-','a','g','e','n','t'}, NGHTTP2_TOKEN_USER_AGENT},
++	[186]= { {':','a','u','t','h','o','r','i','t','y'}, NGHTTP2_TOKEN__AUTHORITY},
++	[59]= { {'r','e','t','r','y','-','a','f','t','e','r'}, NGHTTP2_TOKEN_RETRY_AFTER},
++	[252]= { {'c','o','n','t','e','n','t','-','t','y','p','e'}, NGHTTP2_TOKEN_CONTENT_TYPE},
++	[652]= { {'m','a','x','-','f','o','r','w','a','r','d','s'}, NGHTTP2_TOKEN_MAX_FORWARDS},
++	[461]= { {'l','a','s','t','-','m','o','d','i','f','i','e','d'}, NGHTTP2_TOKEN_LAST_MODIFIED},
++	[765]= { {'c','o','n','t','e','n','t','-','r','a','n','g','e'}, NGHTTP2_TOKEN_CONTENT_RANGE},
++	[941]= { {'i','f','-','n','o','n','e','-','m','a','t','c','h'}, NGHTTP2_TOKEN_IF_NONE_MATCH},
++	[349]= { {'c','a','c','h','e','-','c','o','n','t','r','o','l'}, NGHTTP2_TOKEN_CACHE_CONTROL},
++	[45]= { {'a','u','t','h','o','r','i','z','a','t','i','o','n'}, NGHTTP2_TOKEN_AUTHORIZATION},
++	[717]= { {'a','c','c','e','p','t','-','r','a','n','g','e','s'}, NGHTTP2_TOKEN_ACCEPT_RANGES},
++	[1022]= { {'c','o','n','t','e','n','t','-','l','e','n','g','t','h'}, NGHTTP2_TOKEN_CONTENT_LENGTH},
++	[462]= { {'a','c','c','e','p','t','-','c','h','a','r','s','e','t'}, NGHTTP2_TOKEN_ACCEPT_CHARSET},
++	[719]= { {'a','c','c','e','p','t','-','l','a','n','g','u','a','g','e'}, NGHTTP2_TOKEN_ACCEPT_LANGUAGE},
++	[975]= { {'a','c','c','e','p','t','-','e','n','c','o','d','i','n','g'}, NGHTTP2_TOKEN_ACCEPT_ENCODING},
++	[1008]= { {'c','o','n','t','e','n','t','-','l','a','n','g','u','a','g','e'}, NGHTTP2_TOKEN_CONTENT_LANGUAGE},
++	[752]= { {'w','w','w','-','a','u','t','h','e','n','t','i','c','a','t','e'}, NGHTTP2_TOKEN_WWW_AUTHENTICATE},
++	[240]= { {'c','o','n','t','e','n','t','-','e','n','c','o','d','i','n','g'}, NGHTTP2_TOKEN_CONTENT_ENCODING},
++	[496]= { {'c','o','n','t','e','n','t','-','l','o','c','a','t','i','o','n'}, NGHTTP2_TOKEN_CONTENT_LOCATION},
++	[864]= { {'p','r','o','x','y','-','c','o','n','n','e','c','t','i','o','n'}, NGHTTP2_TOKEN_PROXY_CONNECTION},
++	[929]= { {'i','f','-','m','o','d','i','f','i','e','d','-','s','i','n','c','e'}, NGHTTP2_TOKEN_IF_MODIFIED_SINCE},
++	[897]= { {'t','r','a','n','s','f','e','r','-','e','n','c','o','d','i','n','g'}, NGHTTP2_TOKEN_TRANSFER_ENCODING},
++	[610]= { {'p','r','o','x','y','-','a','u','t','h','e','n','t','i','c','a','t','e'}, NGHTTP2_TOKEN_PROXY_AUTHENTICATE},
++	[419]= { {'i','f','-','u','n','m','o','d','i','f','i','e','d','-','s','i','n','c','e'}, NGHTTP2_TOKEN_IF_UNMODIFIED_SINCE},
++	[243]= { {'c','o','n','t','e','n','t','-','d','i','s','p','o','s','i','t','i','o','n'}, NGHTTP2_TOKEN_CONTENT_DISPOSITION},
++	[611]= { {'p','r','o','x','y','-','a','u','t','h','o','r','i','z','a','t','i','o','n'}, NGHTTP2_TOKEN_PROXY_AUTHORIZATION},
++	[601]= { {'s','t','r','i','c','t','-','t','r','a','n','s','p','o','r','t','-','s','e','c','u','r','i','t','y'}, NGHTTP2_TOKEN_STRICT_TRANSPORT_SECURITY},
++	[971]= { {'a','c','c','e','s','s','-','c','o','n','t','r','o','l','-','a','l','l','o','w','-','o','r','i','g','i','n'}, NGHTTP2_TOKEN_ACCESS_CONTROL_ALLOW_ORIGIN}
++};
++
++static inline int __attribute__((always_inline))
++avx_memeq(const __m256i avx_str_1, const __m256i avx_str_2)
++{
++	__mmask32 ret;
++
++	ret = _mm256_cmp_epi8_mask(avx_str_1, avx_str_2, _MM_CMPINT_EQ);
++	return ret == UINT32_MAX;
++}
++
++static inline int __attribute__((always_inline))
++resolve_str(const __m256i str, const int idx, const __mmask32 load_msk)
++{
++	__m256i avx_str_2 = _mm256_maskz_loadu_epi8(load_msk, nghttp2_tok_arr[idx].ymm);
++
++        if (avx_memeq(str, avx_str_2))
++		return nghttp2_tok_arr[idx].ret;
++
++        return -1;
++}
++
++#define BIT_IDXES	0, 0, 0, 0, 0, 0, 0, 0,	\
++			0, 0, 0, 0, 0, 0, 0, 0,	\
++			0, 0, 0, 0, 0, 0, 18, 3,\
++			26, 17, 18, 1, 0, 0, 0, 0
++
++static inline int __attribute__((always_inline))
++nghttp2_lookup_tok_avx512(const uint8_t *name, size_t len)
++{
++	const __mmask32 load_msk = (1 << len) - 1;
++	const __m256i bytes = _mm256_maskz_loadu_epi8(load_msk, name);
++	const __m256i bit_idxes = _mm256_set_epi8(BIT_IDXES);
++	__mmask32 idx;
++
++	if (unlikely(len > 27))
++		return -1;
++
++	idx = _mm256_mask_bitshuffle_epi64_mask(0x3f0, bytes, bit_idxes);
++	idx |= len & 0xf;
++
++	return resolve_str(bytes, idx, load_msk);
++}
++#endif
+--
+2.25.1
+
