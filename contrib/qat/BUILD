@@ -20,9 +20,9 @@ configure_make(
     configure_options = [
         "--disable-fast-crc-in-assembler",
         "--disable-systemd",
-        "--disable-shared",
         "--with-pic",
         "--enable-static",
+        "--disable-shared",
         "--enable-samples=no",
     ],
     lib_source = "@com_github_intel_qatlib//:all",
