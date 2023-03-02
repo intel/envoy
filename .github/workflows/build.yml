@@ -43,14 +43,11 @@ jobs:
   build_envoy-contrib:
     runs-on: cicd-envoy
 
+    env:
+      ENVOY_DOCKER_BUILD_DIR: /runner/envoy/contrib
+
     steps:
     - uses: actions/checkout@v3
-
-    - uses: actions/cache@v3
-      with:
-        key: bazel.release|${{ hashFiles('./WORKSPACE') }}|${{ hashFiles('**/*.bzl') }}
-        path: |
-          /tmp/envoy-docker-build/repository_cache
 
     - name: Enable IPv6
       run: |
@@ -61,6 +58,10 @@ jobs:
         }' | sudo tee /etc/docker/daemon.json
         sudo service docker restart
 
+    - name: Create build directory
+      run: |
+        mkdir -p $ENVOY_DOCKER_BUILD_DIR
+
     - name: Build envoy-contrib
       env:
         BAZEL_EXTRA_TEST_OPTIONS: --test_keep_going
@@ -70,7 +71,6 @@ jobs:
     - name: Dockerize
       run: |
         sed -i 's/ENVOY_BINARY=envoy/ENVOY_BINARY=envoy-contrib/' ./ci/Dockerfile-envoy
-        sed -i 's/ENVOY_BINARY_SUFFIX=_stripped/ENVOY_BINARY_SUFFIX/' ci/Dockerfile-envoy
         docker build -f ./ci/Dockerfile-envoy -t envoy-contrib:${TAG} .
 
     - name: Login to the container registry
@@ -88,5 +88,4 @@ jobs:
     - name: Clean up
       if: always()
       run: |
-        rm -rf /tmp/envoy-docker-build /tmp/envoy_test*
         docker system prune -f
