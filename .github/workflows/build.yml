@@ -44,7 +44,7 @@ jobs:
     runs-on: cicd-envoy
 
     env:
-      ENVOY_DOCKER_BUILD_DIR: /runner/envoy/contrib
+      ENVOY_DOCKER_BUILD_DIR: /home/envoy/contrib
 
     steps:
     - uses: actions/checkout@v3
