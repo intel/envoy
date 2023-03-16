@@ -1,0 +1,64 @@
+From a5723f4b80eb1490a9fcdc3366fc10280c20c87f Mon Sep 17 00:00:00 2001
+From: Ismo Puustinen <ismo.puustinen@intel.com>
+Date: Mon, 15 Aug 2022 15:43:15 +0300
+Subject: [PATCH 4/4] Fix various data races.
+
+Signed-off-by: Ismo Puustinen <ismo.puustinen@intel.com>
+---
+ src/qatzip.c          | 4 ++--
+ src/qatzip_internal.h | 3 ++-
+ src/qatzip_mem.c      | 2 +-
+ 3 files changed, 5 insertions(+), 4 deletions(-)
+
+diff --git a/src/qatzip.c b/src/qatzip.c
+index 2b5b905..dbe0210 100755
+--- a/src/qatzip.c
++++ b/src/qatzip.c
+@@ -566,8 +566,8 @@ int qzInit(QzSession_T *sess, unsigned char sw_backup)
+     unsigned int dev_id = 0;
+     QzHardware_T *qat_hw = NULL;
+     unsigned int instance_found = 0;
+-    static unsigned int waiting = 0;
+-    static unsigned int wait_cnt = 0;
++    static atomic_int waiting = 0;
++    static atomic_int wait_cnt = 0;
+ #ifdef ADF_PCI_API
+     Cpa32U pcie_count;
+ #endif
+diff --git a/src/qatzip_internal.h b/src/qatzip_internal.h
+index 9dd5bc4..493788d 100755
+--- a/src/qatzip_internal.h
++++ b/src/qatzip_internal.h
+@@ -45,6 +45,7 @@ extern"C" {
+ #include <cpa_dev.h>
+ #endif
+ #include <stdbool.h>
++#include <stdatomic.h>
+ #include <zlib.h>
+ #include <lz4frame.h>
+ 
+@@ -197,7 +198,7 @@ typedef struct ProccesData_S {
+     CpaInstanceHandle *dc_inst_handle;
+     QzInstance_T *qz_inst;
+     Cpa16U num_instances;
+-    char qat_available;
++    atomic_char qat_available;
+     CpaDeviceInfo device_info;
+ } processData_T;
+ 
+diff --git a/src/qatzip_mem.c b/src/qatzip_mem.c
+index 22f0133..00c1272 100755
+--- a/src/qatzip_mem.c
++++ b/src/qatzip_mem.c
+@@ -58,7 +58,7 @@
+ 
+ static QzPageTable_T g_qz_page_table = {{{0}}};
+ static pthread_mutex_t g_qz_table_lock = PTHREAD_MUTEX_INITIALIZER;
+-static volatile int g_table_init = 0;
++static atomic_int g_table_init = 0;
+ static __thread unsigned char *g_a;
+ extern processData_T g_process;
+ 
+-- 
+2.37.2
+

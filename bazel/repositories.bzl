@@ -411,6 +411,11 @@ def _com_github_intel_qatzip():
     external_http_archive(
         name = "com_github_intel_qatzip",
         build_file_content = BUILD_ALL_CONTENT,
+        patch_args = ["-p1"],
+        patches = [
+            "@envoy//bazel/foreign_cc:qatzip-0003-Fix-a-data-race-in-qzMemRegAddr.patch",
+            "@envoy//bazel/foreign_cc:qatzip-0004-Fix-various-data-races.patch",
+        ],
     )
 
 def _com_github_lz4_lz4():
