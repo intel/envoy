@@ -12,7 +12,8 @@ namespace Sgx {
 SGXContext::SGXContext(std::string libpath, std::string token_label, std::string sopin,
                        std::string user_pin)
     : libpath_(std::move(libpath)), tokenlabel_(std::move(token_label)), sopin_(std::move(sopin)),
-      userpin_(std::move(user_pin)), slotid_(0), sessionhandle_(CK_INVALID_HANDLE), p11_(NULL_PTR) {
+      userpin_(std::move(user_pin)), slotid_(0), sessionhandle_(CK_INVALID_HANDLE), p11_(NULL_PTR),
+      running_enclave_threads_(0), maximum_enclave_threads_(100) {
 }
 
 SGXContext::~SGXContext() {
@@ -85,9 +86,6 @@ CK_RV SGXContext::sgxInit() {
     return status;
   }
 
-  running_enclave_threads_ = 0;
-  // Compiled CTK with TCSNum 100, so there can be 100 threads can be run in concurrency.
-  maximum_enclave_threads_ = 100;
   initialized_ = true;
 
   return CKR_OK;
