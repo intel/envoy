@@ -67,11 +67,6 @@ public:
   static int connectionIndex();
 
 private:
-  // Thread local data containing a single queue per worker thread.
-  struct ThreadLocalData : public ThreadLocal::ThreadLocalObject {
-    ThreadLocalData(std::chrono::milliseconds poll_delay, enum KeyType type, int key_size,
-                    const SgxSharedPtr& sgx, Event::Dispatcher& d);
-  };
 
   void initializeKeypair();
 
@@ -86,8 +81,6 @@ private:
   Ssl::BoringSslPrivateKeyMethodSharedPtr method_{};
   Api::Api& api_;
   bssl::UniquePtr<EVP_PKEY> pkey_;
-
-  ThreadLocal::TypedSlotPtr<ThreadLocalData> tls_;
 
   // Resources related to PKCS11 & SGX
   std::string sgx_library_;

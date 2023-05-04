@@ -242,8 +242,6 @@ void SgxPrivateKeyMethodProvider::registerPrivateKeyMethod(SSL* ssl,
                          "is not yet supported.");
   }
 
-  //    ASSERT(tls_->currentThreadRegistered(), "Current thread needs to be registered.");
-
   auto* ops = new SgxPrivateKeyConnection(cb, dispatcher, sgx_context_, bssl::UpRef(pkey_),
                                           private_key_, public_key_);
   SSL_set_ex_data(ssl, SgxPrivateKeyMethodProvider::connectionIndex(), ops);
@@ -292,7 +290,6 @@ SgxPrivateKeyMethodProvider::SgxPrivateKeyMethodProvider(
     const envoy::extensions::private_key_providers::sgx::v3alpha::SgxPrivateKeyMethodConfig& config,
     Server::Configuration::TransportSocketFactoryContext& factory_context, const SgxSharedPtr& sgx)
     : api_(factory_context.api()),
-      tls_(ThreadLocal::TypedSlot<ThreadLocalData>::makeUnique(factory_context.threadLocal())),
       sgx_library_(config.sgx_library()), usr_pin_(config.usr_pin()), so_pin_(config.so_pin()),
       token_label_(config.token_label()), key_type_(config.key_type()),
       key_label_(config.key_label()) {
@@ -345,11 +342,6 @@ int createIndex() {
 } // namespace
 
 int SgxPrivateKeyMethodProvider::connectionIndex() { CONSTRUCT_ON_FIRST_USE(int, createIndex()); }
-
-SgxPrivateKeyMethodProvider::ThreadLocalData::ThreadLocalData(std::chrono::milliseconds,
-                                                              enum KeyType, int,
-                                                              const SgxSharedPtr&,
-                                                              Event::Dispatcher&) {}
 
 } // namespace Sgx
 } // namespace PrivateKeyMethodProvider
