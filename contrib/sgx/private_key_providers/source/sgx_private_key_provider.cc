@@ -154,6 +154,7 @@ ssl_private_key_result_t ecdsaSignWithSgx(SSL* ssl, uint8_t* out, size_t* out_le
   unsigned int hash_len;
   CK_RV status;
   ByteString signature;
+  int sig_size;
 
   auto* ops = static_cast<SgxPrivateKeyConnection*>(
       SSL_get_ex_data(ssl, SgxPrivateKeyMethodProvider::connectionIndex()));
@@ -194,19 +195,23 @@ ssl_private_key_result_t ecdsaSignWithSgx(SSL* ssl, uint8_t* out, size_t* out_le
 
   ECDSA_SIG* sig = ECDSA_SIG_new();
   if (sig == nullptr) {
+    BN_free(r);
+    BN_free(s);
     return ssl_private_key_failure;
   }
   ECDSA_SIG_set0(sig, r, s);
 
   signature.bytes = nullptr;
-  signature.byte_size = i2d_ECDSA_SIG(sig, &signature.bytes);
+  sig_size = i2d_ECDSA_SIG(sig, &signature.bytes);
 
-  if (signature.byte_size > max_out) {
+  if (sig_size < 0 || CK_ULONG(sig_size) > max_out) {
     ECDSA_SIG_free(sig);
     BN_free(r);
     BN_free(s);
     return ssl_private_key_failure;
   }
+
+  signature.byte_size = CK_ULONG(sig_size);
 
   ENVOY_LOG_TO_LOGGER(Logger::Registry::getLog(Logger::Id::secret), debug,
                       "sgx private key provider: SGX ecdsa sign der size: {}", signature.byte_size);
