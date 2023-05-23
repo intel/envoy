@@ -15,24 +15,27 @@ envoy_contrib_package()
 
 configure_make(
     name = "qatlib",
-    autogen = True,
+    autogen = False,
     configure_in_place = True,
-    configure_options = [
-        "--disable-fast-crc-in-assembler",
-        "--disable-systemd",
-        "--disable-shared",
-        "--with-pic",
-        "--enable-static",
-        "--enable-samples=no",
+    copts = [
+        "-Wno-unused-command-line-argument",
+        "-Wno-enum-conversion",
+        "-Wno-error=sizeof-array-decay",
+        "-Wno-error=unneeded-internal-declaration",
     ],
     lib_source = "@com_github_intel_qatlib//:all",
+    # Dynamically linking the libudev, since the libudev is part of building image and container image.
+    # So it needn't to be statically linked.
+    linkopts = ["-ludev"],
     out_static_libs = [
         "libqat.a",
-        "libusdm.a",
+        "libusdm_drv.a",
+        "libadf.a",
+        "libosal.a",
     ],
+    # The oot qatlib won't install the header files, then need to install header files manually.
+    postfix_script = "mkdir -p $INSTALLDIR/include && cp -rL quickassist/include/* $INSTALLDIR/include && cp quickassist/utilities/libusdm_drv/qae_mem.h $INSTALLDIR/include && cp quickassist/lookaside/access_layer/include/*.h $INSTALLDIR/include && cp quickassist/include/dc/*.h $INSTALLDIR/include",
     target_compatible_with = envoy_contrib_linux_x86_64_constraints(),
     visibility = ["//visibility:public"],
-    # Use boringssl alias to select fips vs non-fips version.
-    deps = ["//bazel:boringssl"],
     alwayslink = True,
 )

@@ -1,0 +1,29 @@
+diff --git a/quickassist/build_system/build_files/defenses.mk b/quickassist/build_system/build_files/defenses.mk
+index 9ad413f..6c9a2e1 100644
+--- a/quickassist/build_system/build_files/defenses.mk
++++ b/quickassist/build_system/build_files/defenses.mk
+@@ -76,9 +76,9 @@ ifeq ($($(PROG_ACY)_OS_LEVEL),user_space)
+ EXTRA_CFLAGS += -fPIC
+ endif
+
+-# Fortify source. -D_FORTIFY_SOURCE=2 needs optimization level 2 (-02)
++# Fortify source. -D_FORTIFY_SOURCE=1 needs optimization level 2 (-02)
+ # to work properly. It does not work with debug builds (-O0)
+-EXTRA_CFLAGS += -O2 -D_FORTIFY_SOURCE=2
++EXTRA_CFLAGS += -O2
+
+ # Format string vulnerabilities
+ EXTRA_CFLAGS += -Wformat -Wformat-security
+diff --git a/quickassist/utilities/adf_ctl/common.mk b/quickassist/utilities/adf_ctl/common.mk
+index a611ff9..278b1a7 100644
+--- a/quickassist/utilities/adf_ctl/common.mk
++++ b/quickassist/utilities/adf_ctl/common.mk
+@@ -76,7 +76,7 @@ EXTRA_CXXFLAGS += -fstack-protector
+ EXE_FLAGS += -fPIE -pie
+ EXTRA_CXXFLAGS += -fPIC
+ # Fortify source
+-EXTRA_CXXFLAGS += -O2 -D_FORTIFY_SOURCE=2
++EXTRA_CXXFLAGS += -O2
+ # Format string vulnerabilities
+ EXTRA_CXXFLAGS += -Wformat -Wformat-security
+ endif

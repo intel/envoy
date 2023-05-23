@@ -1,0 +1,13 @@
+diff --git a/quickassist/utilities/adf_ctl/common.mk b/quickassist/utilities/adf_ctl/common.mk
+index 51a8126..afe572f 100644
+--- a/quickassist/utilities/adf_ctl/common.mk
++++ b/quickassist/utilities/adf_ctl/common.mk
+@@ -87,7 +87,7 @@ EXTRA_LDFLAGS += --sysroot=$(SYSROOT)
+ EXTRA_CXXFLAGS += --sysroot=$(SYSROOT)
+ endif
+ 
+-CXX = $(CROSS_COMPILE)g++
++CXX = clang++
+ CXXFLAGS += -std=c++0x
+ CXXFLAGS += -I$(KERNEL_SOURCE_DIR)/drivers/crypto/qat/qat_common
+ 

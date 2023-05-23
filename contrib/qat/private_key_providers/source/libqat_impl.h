@@ -1,10 +1,12 @@
 #pragma once
 
 #include "contrib/qat/private_key_providers/source/libqat.h"
-#include "qat/cpa_cy_im.h"
-#include "qat/icp_sal_poll.h"
-#include "qat/icp_sal_user.h"
 
+extern "C" {
+#include "lac/cpa_cy_im.h"
+#include "icp_sal_poll.h"
+#include "icp_sal_user.h"
+}
 namespace Envoy {
 namespace Extensions {
 namespace PrivateKeyMethodProvider {
