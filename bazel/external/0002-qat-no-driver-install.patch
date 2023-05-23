@@ -1,0 +1,30 @@
+diff --git a/Makefile.in b/Makefile.in
+index 5601afe..a0206cc 100644
+--- a/Makefile.in
++++ b/Makefile.in
+@@ -396,8 +396,8 @@ num4xxxDevicesV := `lspci -n | egrep -c "$(INTEL_VENDORID):($(QAT_4XXX_DEVICE_NU
+ numVQATDevices := `lspci -vnd 8086: | egrep -c "$(INTEL_VENDORID):$(VQAT_DEVICE_NUMBER)"`
+ 
+ #Targets lists
+-ALL_TARGETS = qat-driver-all quickassist-all adf-ctl-all qat-service-all adf-rl-all
+-INSTALL_TARGETS = qat-driver-install quickassist-install adf-ctl-install qat-service-install
++ALL_TARGETS = quickassist-all adf-rl-all
++INSTALL_TARGETS = quickassist-install
+ UNINSTALL_TARGETS = qat-driver-uninstall quickassist-uninstall qat-service-uninstall adf-ctl-uninstall sample-uninstall
+ CLEAN_TARGETS = qat-driver-clean quickassist-clean adf-ctl-clean qat-service-clean sample-clean
+ 
+@@ -997,6 +997,14 @@ quickassist-all:
+ 	@$(MAKE) -C $(QUICKASSIST_DIR)
+ 
+ quickassist-install:
++	$(ECHO) "Copying libqat_s.so to $(libdir)";	\
++	$(INSTALL) -D -m 755 $(ICP_BUILD_OUTPUT)/libqat_s.so $(libdir)/libqat_s.so;	\
++	$(INSTALL) -D -m 755 $(ICP_BUILD_OUTPUT)/libqat.a $(libdir)/libqat.a;	\
++	$(ECHO) "Copying libusdm_drv_s.so to $(libdir)";	\
++	$(INSTALL) -D -m 755 $(ICP_BUILD_OUTPUT)/libusdm_drv_s.so $(libdir)/libusdm_drv_s.so;	\
++	$(INSTALL) -D -m 755 $(ICP_BUILD_OUTPUT)/libusdm_drv.a $(libdir)/libusdm_drv.a;	\
++	$(INSTALL) -D -m 755 $(ICP_BUILD_OUTPUT)/libadf.a $(libdir)/libadf.a;	\
++	$(INSTALL) -D -m 755 $(ICP_BUILD_OUTPUT)/libosal.a $(libdir)/libosal.a;	\
+ 
+ quickassist-uninstall:
+ 

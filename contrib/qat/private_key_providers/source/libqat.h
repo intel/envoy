@@ -3,10 +3,12 @@
 #include "envoy/common/pure.h"
 
 #include "openssl/ssl.h"
-#include "qat/cpa.h"
-#include "qat/cpa_cy_rsa.h"
-#include "qat/qae_mem.h"
 
+extern "C" {
+#include "cpa.h"
+#include "lac/cpa_cy_rsa.h"
+#include "qae_mem.h"
+}
 namespace Envoy {
 namespace Extensions {
 namespace PrivateKeyMethodProvider {
