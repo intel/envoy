@@ -20,23 +20,23 @@ jobs:
     steps:
     - uses: actions/checkout@v3.3.0
 
-    - name: Build image Proxyv2
+    - name: Build envoy binary in intel istio-proxy 
       run: |
         ./.github/workflows/build.sh
       env:
         UPDATE_BRANCH: ${{ github.base_ref || github.ref_name }} 
 
-    - name: Login to the container registry
-      uses: docker/login-action@v2.1.0
-      with:
-        registry: ${{ env.HUB }}
-        username: ${{ github.repository_owner }}
-        password: ${{ secrets.GITHUB_TOKEN }}
+    # - name: Login to the container registry
+    #   uses: docker/login-action@v2.1.0
+    #   with:
+    #     registry: ${{ env.HUB }}
+    #     username: ${{ github.repository_owner }}
+    #     password: ${{ secrets.GITHUB_TOKEN }}
 
-    - name: Push image Proxyv2
-      if: ${{ github.event_name != 'pull_request' }}
-      run: |
-        docker push ${HUB}/proxyv2:${TAG}
+    # - name: Push image Proxyv2
+    #   if: ${{ github.event_name != 'pull_request' }}
+    #   run: |
+    #     docker push ${HUB}/proxyv2:${TAG}
 
     - name: Cleanup Image Resources
       if: always()
