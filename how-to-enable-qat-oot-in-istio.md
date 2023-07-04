@@ -1,7 +1,8 @@
 # How to enable QAT oot in Istio 
 ## 1. Enviornment
 ```
-Processor: SPR XCC  
+Processor: SPR XCC 
+System: Ubuntu 22.04 
 Kernel: Linux r027s014.fl30lne001 5.15.0-73-generic #80-Ubuntu SMP Mon May 15 15:18:26 UTC 2023 x86_64 x86_64 x86_64 GNU/Linux 
 
 ```
