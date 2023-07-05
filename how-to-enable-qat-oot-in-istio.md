@@ -15,6 +15,7 @@ tar -xzvf QAT20.L.1.0.20-00008.tar.gz
 ./configure --enable-icp-sriov=host
 sudo make install
 ```  
+### 2.3 Configuration for QAT
 ```
 sudo mkdir /etc/systemd/system/containerd.service.d
 sudo bash -c 'cat <<EOF >>/etc/systemd/system/containerd.service.d/memlock.conf
@@ -24,6 +25,21 @@ EOF'
 
 sudo systemctl daemon-reload
 sudo systemctl restart containerd
+```
+```
+sudo cp /etc/security/limits.conf /etc/security/limits.conf.qatlib_bak
+echo `whoami` - memlock 500000  | sudo tee -a /etc/security/limits.conf > /dev/null
+```
+Add user to qat group:
+```
+sudo usermod -a -G qat `whoami`
+sudo su -l $USER
+```
+Add `rw` to qat devices:
+```
+sudo chmod a+rw /dev/uio*
+sudo chmod a+rw /dev/qat_*
+sudo chmod a+rw /dev/usdm*
 ```
 ## 3. Install k8s cluster
 Install k8s cluster with kubeadm
@@ -47,7 +63,7 @@ sudo apt-get install \
 And you need to install `golang` as well.
 ### 5.2 Build envoy with clang 14.0.0 in Istio-proxy
 ```
- git clone https://github.com/istio/proxy.git
+ git clone https://github.com/istio/proxy.git -b release-1.18
  cd proxy
  git clone https://github.com/intel/envoy.git -b oot_qat_build_direct_static
  cd envoy
@@ -83,7 +99,7 @@ make build_envoy
 ## 6. Build and install istio
 ### 6.1 Build istio images
 ```
-git clone https://github.com/istio/istio.git -b release-1.17
+git clone https://github.com/istio/istio.git -b release-1.18
 cd istio
 make build
 cp -f ~/proxy/bazel-bin/envoy ./out/linux_amd64/release/envoy
@@ -137,6 +153,8 @@ spec:
             privateKeyProvider:
               qat:
                 pollDelay: 2ms
+
+# warning: only for debug, you need to comment the following code when benchmark.
   values:
     global:
       logging:
@@ -220,7 +238,7 @@ sudo sed -i "/127.0.0.1/a <host-ip> httpbin.example.com" /etc/hosts
 ```
 ```
 get ingress gateway secure port:
-kubectl get svc -A |gre ingress
+kubectl get svc -A |grep ingress
 
 istio-system   istio-ingressgateway   LoadBalancer   10.111.236.136   <pending>     15021:32635/TCP,80:30842/TCP,443:32004/TCP   3h9m
 
