@@ -294,7 +294,7 @@ void SgxPrivateKeyMethodProvider::initialize() {
 SgxPrivateKeyMethodProvider::SgxPrivateKeyMethodProvider(
     const envoy::extensions::private_key_providers::sgx::v3alpha::SgxPrivateKeyMethodConfig& config,
     Server::Configuration::TransportSocketFactoryContext& factory_context, const SgxSharedPtr& sgx)
-    : api_(factory_context.api()),
+    : api_(factory_context.serverFactoryContext().api()),
       sgx_library_(config.sgx_library()), usr_pin_(config.usr_pin()), so_pin_(config.so_pin()),
       token_label_(config.token_label()), key_type_(config.key_type()),
       key_label_(config.key_label()) {
@@ -327,7 +327,7 @@ SgxPrivateKeyMethodProvider::SgxPrivateKeyMethodProvider(
     throw EnvoyException("Not supported key type, only RSA and ECDSA are supported.");
   }
 
-  sgx_context_ = factory_context.singletonManager().getTyped<SGXContext>(
+  sgx_context_ = factory_context.serverFactoryContext().singletonManager().getTyped<SGXContext>(
       SINGLETON_MANAGER_REGISTERED_NAME(sgx_context), [this] {
         return std::make_shared<SGXContext>(sgx_library_, token_label_, so_pin_, usr_pin_);
       });
