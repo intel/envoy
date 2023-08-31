@@ -333,6 +333,7 @@ def envoy_dependencies(skip_targets = []):
     external_http_archive("com_github_aignas_rules_shellcheck")
     external_http_archive("aspect_bazel_lib")
     _com_github_fdio_vpp_vcl()
+    _pkcs11_header_files()
 
     # Unconditional, since we use this only for compiler-agnostic fuzzing utils.
     _org_llvm_releases_compiler_rt()
@@ -1372,6 +1373,22 @@ def _utf8_range():
 
 def _rules_ruby():
     external_http_archive("rules_ruby")
+
+def _pkcs11_header_files():
+    external_http_archive(
+        name = "pkcs11",
+        build_file_content = """
+filegroup(
+    name = "pkcs11headers",
+    srcs = glob([
+        "include/pkcs11-v2.40/pkcs11.h",
+        "include/pkcs11-v2.40/pkcs11f.h",
+        "include/pkcs11-v2.40/pkcs11t.h",
+    ]),
+    visibility = ["@envoy//contrib/sgx/private_key_providers/source:__pkg__"],
+)
+""",
+    )
 
 def _foreign_cc_dependencies():
     external_http_archive("rules_foreign_cc")
