@@ -555,6 +555,12 @@ case $CI_TARGET in
               "${TEST_TARGETS[@]}"
         ;;
 
+    # build totally static binary
+    dev.contrib.static)
+        setup_clang_toolchain
+        bazel build --linkopt=-static --copt=-static //contrib/exe:envoy-static
+        ;;
+
     distribution)
         echo "Building distro packages..."
         setup_clang_toolchain
