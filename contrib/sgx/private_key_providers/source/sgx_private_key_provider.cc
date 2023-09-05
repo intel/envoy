@@ -263,6 +263,7 @@ void SgxPrivateKeyMethodProvider::registerPrivateKeyMethod(SSL* ssl,
 }
 
 bool SgxPrivateKeyMethodProvider::checkFips() { return true; }
+bool SgxPrivateKeyMethodProvider::isAvailable() { return true; }
 
 Ssl::BoringSslPrivateKeyMethodSharedPtr
 SgxPrivateKeyMethodProvider::getBoringSslPrivateKeyMethod() {
