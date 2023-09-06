@@ -61,6 +61,7 @@ public:
   void unregisterPrivateKeyMethod(SSL* ssl) override;
 
   bool checkFips() override;
+  bool isAvailable() override;
 
   Ssl::BoringSslPrivateKeyMethodSharedPtr getBoringSslPrivateKeyMethod() override;
 
