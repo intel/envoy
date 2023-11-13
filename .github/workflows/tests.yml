@@ -1,0 +1,41 @@
+name: Tests
+
+on:
+  push:
+    branches: [ release-*-intel ]
+  pull_request:
+    branches: [ release-*-intel ]
+
+env:
+  HUB: ghcr.io/${{ github.repository }}
+
+jobs:
+  tests:
+    runs-on: worker
+    environment:
+      name: dev
+
+    env:
+      TAG: ${{ github.base_ref || github.ref_name }} 
+    steps:
+    - uses: actions/checkout@v3.3.0
+
+    - name: Check disk space at beginning
+      run: |
+        echo "disk space at beginning of build:" & df -h
+    
+    - name: Envoy release tests 
+      run: |
+        ./ci/run_envoy_docker.sh './ci/do_ci.sh release'
+
+    #- name: Cleanup Image Resources
+    #  if: always()
+    #  continue-on-error: true
+    #  run: |
+    #    docker system prune -a -f && docker volume rm $(docker volume ls -q --filter dangling=true)
+
+    - name: Check disk space at ending
+      if: always()
+      run: |
+        echo "disk space at ending of build:" & df -h
+
