@@ -40,8 +40,9 @@ jobs:
 
     - name: Cleanup Image Resources
       if: always()
+      continue-on-error: true
       run: |
-        docker system prune -f && docker volume rm $(docker volume ls -q --filter dangling=true)
+        docker system prune -a -f && docker volume rm $(docker volume ls -q --filter dangling=true)
 
     - name: Check disk space at ending
       run: |
