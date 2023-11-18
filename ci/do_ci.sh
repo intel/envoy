@@ -848,7 +848,7 @@ case $CI_TARGET in
                 test "${BAZEL_BUILD_OPTIONS[@]}" \
                 --remote_download_minimal \
                 "${BAZEL_RELEASE_OPTIONS[@]}" \
-                //contrib/...
+                "${TEST_TARGETS[@]}"
         fi
         # Build release binaries
         bazel build "${BAZEL_BUILD_OPTIONS[@]}" \

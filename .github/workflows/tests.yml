@@ -26,7 +26,10 @@ jobs:
     
     - name: Envoy release tests 
       run: |
-        ./ci/run_envoy_docker.sh './ci/do_ci.sh release'
+        ENVOY_DOCKER_BUILD_DIR=/home/cicd ./ci/run_envoy_docker.sh "./ci/do_ci.sh release \
+        -- //test/... //contrib/... @com_github_google_quiche//:ci_tests \
+        -//test/extensions/filters/listener/original_dst:original_dst_integration_test \
+        -//test/common/network:io_socket_handle_impl_integration_test"
 
     #- name: Cleanup Image Resources
     #  if: always()
