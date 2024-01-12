@@ -10,7 +10,6 @@
 #include "zstd.h"
 
 namespace Envoy {
-namespace Extensions {
 namespace Compression {
 namespace Zstd {
 namespace Common {
@@ -117,5 +116,4 @@ private:
 } // namespace Common
 } // namespace Zstd
 } // namespace Compression
-} // namespace Extensions
 } // namespace Envoy
