@@ -700,9 +700,7 @@ google-apitools==0.5.32 \
 google-auth[aiohttp]==2.27.0 \
     --hash=sha256:8e4bad367015430ff253fe49d500fdc3396c1a434db5740828c728e45bcce245 \
     --hash=sha256:e863a56ccc2d8efa83df7a80272601e43487fa9a728a376205c86c26aaefa821
-    # via
-    #   google-auth
-    #   gsutil
+    # via gsutil
 google-reauth==0.1.1 \
     --hash=sha256:cb39074488d74c8853074dde47368bbf8f739d4a4338b89aab696c895b6d8368 \
     --hash=sha256:f9f6852a55c2c5453d581cd01f3d1278e86147c03d008409800390a834235892
@@ -728,9 +726,9 @@ icalendar==5.0.11 \
     --hash=sha256:7a298bb864526589d0de81f4b736eeb6ff9e539fefb405f7977aa5c1e201ca00 \
     --hash=sha256:81864971ac43a1b7d0a555dc1b667836ce59fc719a7f845a96f2f03205fb83b9
     # via -r requirements.in
-idna==3.6 \
-    --hash=sha256:9ecdbbd083b06798ae1e86adcbfe8ab1479cf864e4ee30fe4e46a003d12491ca \
-    --hash=sha256:c05567e9c24a6b9faaa835c4821bad0590fbb9d5779e7caa6e1cc4978e7eb24f
+idna==3.7 \
+    --hash=sha256:028ff3aadf0609c1fd278d8ea3089299412a7a8b9bd005dd08b9f8285bcb5cfc \
+    --hash=sha256:82fee1fc78add43492d3a1898bfa6d8a904cc97d8427f683ed8e798d07761aa0
     # via
     #   requests
     #   yarl
@@ -1063,7 +1061,6 @@ pyjwt[crypto]==2.8.0 \
     # via
     #   gidgethub
     #   pygithub
-    #   pyjwt
 pylsqpack==0.3.18 \
     --hash=sha256:005ddce84bdcbf5c3cf99f764504208e1aa0a91a8331bf47108f2708f2a315e6 \
     --hash=sha256:06e1bbe47514b83cd03158e5558ef8cc44f578169c1820098be9f3cc4137f16a \
